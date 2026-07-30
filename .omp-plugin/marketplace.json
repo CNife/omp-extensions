@@ -24,6 +24,11 @@
       "name": "skills-injection",
       "description": "交互式控制哪些技能被注入到系统提示词，持久化配置",
       "source": "./plugins/skills-injection"
+    },
+    {
+      "name": "cache-miss-notices",
+      "description": "显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices",
+      "source": "./plugins/cache-miss-notices"
     }
   ]
 }
