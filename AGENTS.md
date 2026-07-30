@@ -14,6 +14,9 @@ omp-extensions/
       extensions/             # 扩展入口（.ts 文件）
       skills/                 # 技能（<name>/SKILL.md）
       README.md
+  docs/agents/                # 工程技能配置（issue 追踪器、领域文档）
+    issue-tracker.md
+    domain.md
   AGENTS.md
   README.md
   LICENSE
