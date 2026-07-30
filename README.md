@@ -22,6 +22,7 @@ omp plugin link ./plugins/nmem-sync
 | 插件 | 说明 |
 | --- | --- |
 | [nmem-sync](plugins/nmem-sync/) | nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件 |
+| [simple-plannotator](plugins/simple-plannotator/) | Plannotator 浏览器审阅/标注，注入 /pnr /pna /pnl 三个斜杠命令 |
 
 ## 添加新插件
 
