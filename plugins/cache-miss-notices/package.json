@@ -1,0 +1,10 @@
+{
+  "name": "cache-miss-notices",
+  "version": "0.1.0",
+  "description": "显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices",
+  "private": true,
+  "license": "MIT",
+  "omp": {
+    "extensions": ["./extensions/cache-miss-notices.ts"]
+  }
+}
