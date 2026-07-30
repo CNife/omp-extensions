@@ -34,3 +34,13 @@ omp-extensions/
 ## 不进仓
 
 `herdr-omp-agent-state.ts`、`dcg-guard.ts` 等 local-only 文件留在本机 `~/.omp/agent/extensions/`，不迁入本树。
+
+## Agent skills
+
+### Issue tracker
+
+Issues 托管在 GitHub Issues（通过 `gh` CLI 操作）。详见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+单上下文布局：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
