@@ -1,0 +1,14 @@
+{
+  "name": "omp-extensions",
+  "owner": { "name": "CNife" },
+  "metadata": {
+    "description": "CNife 的 OMP 扩展集合"
+  },
+  "plugins": [
+    {
+      "name": "nmem-sync",
+      "description": "nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件",
+      "source": "./plugins/nmem-sync"
+    }
+  ]
+}

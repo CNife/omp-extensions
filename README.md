@@ -1,52 +1,30 @@
 # omp-extensions
 
-CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合。
+CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace 形式组织。
 
-## 结构
+## 安装
 
-| 目录 | 说明 |
-| --- | --- |
-| `extensions/` | OMP 扩展（`.ts` 文件），同步到 `~/.omp/agent/extensions/` |
-| `skills/` | OMP 技能（`<name>/SKILL.md`），同步到 `~/.omp/agent/skills/` |
-| `scripts/` | 同步脚本 |
-
-## 同步
+### 远程（marketplace）
 
 ```bash
-# 预览
-node scripts/sync.mjs --dry-run
-
-# 写入本机（按条目软链，绝不整树替换）
-node scripts/sync.mjs
+/marketplace add CNife/omp-extensions
+/marketplace install nmem-sync@omp-extensions
 ```
 
-脚本按**条目**软链到 `~/.omp/agent/`：
+### 本地开发
 
-| 条目类型 | 判定 | 动作 |
-| --- | --- | --- |
-| 扩展 | `extensions/*.ts` | 软链文件到 `~/.omp/agent/extensions/` |
-| 技能 | `skills/<name>/SKILL.md` | 软链目录到 `~/.omp/agent/skills/` |
+```bash
+omp plugin link ./plugins/nmem-sync
+```
 
-### 幂等与冲突
+## 插件
 
-- 重复运行安全：已指向正确源的软链不动。
-- 目标已存在且**不是**软链 -> **失败并提示**，避免覆盖 herdr、dcg-guard 等 local-only 文件。
+| 插件 | 说明 |
+| --- | --- |
+| [nmem-sync](plugins/nmem-sync/) | nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件 |
 
-## 不进仓（local-only 边界）
+## 添加新插件
 
-以下留在本机扩展目录，**不要**迁入本树：
-
-- `herdr-omp-agent-state.ts`（由 herdr 维护）
-- `dcg-guard.ts`（由 DCG 维护）
-- 密钥、会话数据
-
-## 当前内容
-
-| 条目 | 类型 | 说明 |
-| --- | --- | --- |
-| `nmem-sync.ts` | 扩展 | nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件 |
-| `distill-memory` | 技能 | 保存记忆（模型可主动触发） |
-| `search-memory` | 技能 | 搜索记忆（模型可主动触发） |
-| `read-working-memory` | 技能 | 读取 Working Memory（`disable-model-invocation`） |
-| `save-thread` | 技能 | 保存会话 handoff（`disable-model-invocation`） |
-| `status` | 技能 | 检查 nmem 后端连通性（`disable-model-invocation`） |
+1. 在 `plugins/` 下创建子目录，包含 `package.json`、`extensions/`、`skills/` 等。
+2. 在 `.omp-plugin/marketplace.json` 中注册。
+3. `omp plugin link ./plugins/<name>` 部署到本机。
