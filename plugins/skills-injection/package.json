@@ -1,0 +1,19 @@
+{
+  "name": "skills-injection",
+  "version": "0.1.0",
+  "description": "交互式控制哪些技能被注入到 omp 的系统提示词，持久化配置",
+  "private": true,
+  "license": "MIT",
+  "author": "CNife <CNife@vip.qq.com>",
+  "homepage": "https://github.com/CNife/omp-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNife/omp-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CNife/omp-extensions/issues"
+  },
+  "omp": {
+    "extensions": ["./extensions/index.ts"]
+  }
+}
