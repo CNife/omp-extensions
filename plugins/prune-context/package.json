@@ -1,0 +1,19 @@
+{
+  "name": "prune-context",
+  "version": "0.2.0",
+  "description": "确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩",
+  "private": true,
+  "license": "MIT",
+  "author": "CNife <CNife@vip.qq.com>",
+  "homepage": "https://github.com/CNife/omp-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNife/omp-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CNife/omp-extensions/issues"
+  },
+  "omp": {
+    "extensions": ["./extensions/index.ts"]
+  }
+}
