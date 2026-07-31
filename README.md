@@ -23,6 +23,10 @@ omp plugin link ./plugins/nmem-sync
 | --- | --- |
 | [nmem-sync](plugins/nmem-sync/) | nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件 |
 | [simple-plannotator](plugins/simple-plannotator/) | Plannotator 浏览器审阅/标注，注入 /pnr /pna /pnl 三个斜杠命令 |
+| [prune-context](plugins/prune-context/) | 确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩 |
+| [skills-injection](plugins/skills-injection/) | 交互式控制哪些技能被注入到系统提示词，持久化配置 |
+| [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
+| [add-provider-models](plugins/add-provider-models/) | omp 加 provider+模型技能 + capture 验证扩展 |
 
 ## 添加新插件
 
