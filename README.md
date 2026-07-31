@@ -13,8 +13,11 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 
 ### 本地开发
 
+改源码后重新安装即可（命令同上）：
+
 ```bash
-omp plugin link ./plugins/nmem-sync
+/marketplace add CNife/omp-extensions
+/marketplace install <name>@omp-extensions
 ```
 
 ## 插件
@@ -32,4 +35,4 @@ omp plugin link ./plugins/nmem-sync
 
 1. 在 `plugins/` 下创建子目录，包含 `package.json`、`extensions/`、`skills/` 等。
 2. 在 `.omp-plugin/marketplace.json` 中注册。
-3. `omp plugin link ./plugins/<name>` 部署到本机。
+3. 安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`（**不要用 `omp plugin link`**）。

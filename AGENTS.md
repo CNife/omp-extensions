@@ -26,8 +26,9 @@ omp-extensions/
 
 1. 在 `plugins/` 下创建子目录，包含 `package.json`（声明 `omp.extensions` 和 `omp.skills`）、`extensions/`、`skills/` 等。
 2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。
-3. 本机部署：`omp plugin link ./plugins/<name>`
-4. 远程安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`
+3. 安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`
+
+> 本项目的插件通过 OMP marketplace 直接安装，**不要用 `omp plugin link`**。
 
 ## 技能 frontmatter
 
