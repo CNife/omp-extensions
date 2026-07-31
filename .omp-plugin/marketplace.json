@@ -29,6 +29,11 @@
       "name": "cache-miss-notices",
       "description": "显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices",
       "source": "./plugins/cache-miss-notices"
+    },
+    {
+      "name": "add-provider-models",
+      "description": "omp 加 provider+模型技能 + capture 验证扩展",
+      "source": "./plugins/add-provider-models"
     }
   ]
 }
