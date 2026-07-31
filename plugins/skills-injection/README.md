@@ -99,3 +99,16 @@ non-injectable (K): z
 ```bash
 cd plugins/skills-injection && bun test  # 或 node --test --experimental-strip-types
 ```
+
+## 已知问题
+
+skills-injection 插件的 `/skills-injection` 命令有两个视觉 bug，根因在 omp 框架而非插件本身，插件层无法干净修复：
+
+1. **幻影 user message**：命令文本被渲染进对话、却从未发给模型（session JSONL 无对应记录），关闭 TUI 后仍残留。
+2. **Working 闪烁**：自定义 TUI 显示期间，顶部状态行挂着 `⠏ Working…`，而非等待输入。
+
+**根因**：omp 主 Enter 提交路径（`input-controller.ts`）对所有扩展命令无条件走 `startPendingSubmission`--先 `addMessageToChat`（echo）再 `ensureLoadingAnimation`（loader）。内置命令（`/tools`、`/settings`）在 `executeBuiltinSlashCommand` 即短路返回，不走此路径；扩展命令不在其中。`ctx.ui.custom`（`showHookCustom`）不清 loader；本地命令无模型 turn，`replaceOptimisticUserMessage` 不触发，故 echo 不被移除（`finishPendingSubmission` 只清引用、不 `removeChild`）。skills-injection 插件代码与官方范例 `examples/extensions/tools.ts` 结构一致。
+
+**影响**：仅视觉，不影响功能——配置读写、`before_agent_start` 过滤均正常。
+
+**修复方向**：改 omp 框架——主 Enter 路径对已知斜杠命令（`isKnownSlashCommand`）在 `startPendingSubmission` 前 `return`（仿队列消息路径 `#deliverQueuedMessage`），两个 bug 同时消失。
