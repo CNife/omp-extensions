@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -u
+if [ -n "${PLANNO_STUB_LOG:-}" ]; then
+  { printf 'cwd=%s\n' "$PWD"; for a in "$@"; do printf 'arg=%s\n' "$a"; done; } >> "$PLANNO_STUB_LOG"
+fi
+sleep "${PLANNO_STUB_SLEEP:-0.1}"
+[ -n "${PLANNO_STUB_STDOUT:-}" ] && printf '%s\n' "$PLANNO_STUB_STDOUT"
+[ -n "${PLANNO_STUB_STDERR:-}" ] && printf '%s\n' "$PLANNO_STUB_STDERR" >&2
+exit "${PLANNO_STUB_EXIT:-0}"

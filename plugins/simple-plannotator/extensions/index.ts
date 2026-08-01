@@ -25,6 +25,7 @@ async function runPlannotator(
   args: string[],
   label: string,
   cleanup?: () => void,
+  feedbackPrefix?: string,
 ): Promise<void> {
   try {
     const proc = Bun.spawn(["plannotator", ...args], {
@@ -47,7 +48,13 @@ async function runPlannotator(
 
     const feedback = stdout.trim();
     if (feedback) {
-      pi.sendUserMessage(feedback, { deliverAs: "followUp" });
+      // 省略 deliverAs：显式 deliverAs（如 "followUp"）只入队不启动回合，空闲时
+      // 反馈会静默躺在队列里直到下一条显式输入；省略后空闲路径直接走 prompt()
+      // 启动回合，反馈立即作为用户消息进入会话。
+      // feedbackPrefix：/pnl 标注的是扩展生成的临时载体文件，反馈本身只含
+      // "(line N)" 行号引用、无文件名，AI 收到后会困惑"文件在哪"。前缀明确
+      // 告知这是对"上一条助手消息"的标注反馈，无需查找文件（内容即在会话中）。
+      pi.sendUserMessage(feedbackPrefix ? `${feedbackPrefix}\n\n${feedback}` : feedback);
     } else {
       ctx.ui.notify(`${label} closed (no feedback).`, "info");
     }
@@ -171,13 +178,22 @@ export default function simplePlannotator(pi: ExtensionAPI): void {
       }
 
       ctx.ui.notify("Opening annotation UI for last message...", "info");
-      void runPlannotator(pi, ctx, ["annotate", tmpFile], "Annotation", () => {
-        try {
-          rmSync(tmpFile, { force: true });
-        } catch {
-          /* ignore */
-        }
-      });
+      void runPlannotator(
+        pi,
+        ctx,
+        ["annotate", tmpFile],
+        "Annotation",
+        () => {
+          try {
+            rmSync(tmpFile, { force: true });
+          } catch {
+            /* ignore */
+          }
+        },
+        // 反馈 framing：告知 AI 这是对"上一条助手消息"的标注反馈，避免其困惑于
+        // 已删除的临时载体文件"在哪"。
+        "这是对你上一条助手消息的标注反馈，请直接处理，无需查找文件。",
+      );
     },
   });
 }
