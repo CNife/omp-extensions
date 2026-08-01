@@ -382,6 +382,28 @@ test("stdout 反馈 -> sendUserMessage 直接发送（省略 deliverAs，空闲�
 	ok(!notified.some((n) => n.type === "error"), "不应有错误通知");
 });
 
+test("/pnl 反馈投递: 前缀说明这是对上一条助手消息的反馈", async () => {
+	const { scratch } = setupScratch();
+	process.env.PLANNO_STUB_STDOUT = "请修复 X";
+	const pi = makePi();
+	simplePlannotator(pi);
+	const notified: { msg: string; type: string }[] = [];
+	const entries = [msg("assistant", "last reply")];
+	pi.commands.get("pnl").handler(undefined, makeCtx(scratch, entries, notified));
+
+	await waitFor(() => pi.sent.length > 0);
+	// 反馈必须带 framing 前缀：明确告诉 AI 这是对它上一条消息的标注反馈，
+	// 而非让 AI 对着一个已删除的临时文件猜"文件在哪"。
+	ok(
+		pi.sent[0].content.startsWith(
+			"这是对你上一条助手消息的标注反馈，请直接处理，无需查找文件。",
+		),
+		"反馈应带 framing 前缀",
+	);
+	ok(pi.sent[0].content.includes("请修复 X"), "反馈正文应完整保留");
+	strictEqual(pi.sent[0].opts, undefined, "仍应省略 deliverAs");
+});
+
 test("无反馈 -> closed (no feedback) 通知，不调 sendUserMessage", async () => {
 	const { scratch } = setupScratch();
 	const pi = makePi();
