@@ -24,7 +24,7 @@ irm https://plannotator.ai/install.ps1 | iex
 | `/pna <path>` | 在浏览器中标注 Markdown 文件、文件夹或 URL |
 | `/pnl` | 标注当前会话中最后一条 AI 消息 |
 
-在浏览器中标注后，反馈作为 follow-up 消息发回 agent；无反馈时仅通知关闭。
+在浏览器中标注后，反馈作为用户消息直接发回 agent（立即触发处理回合）；无反馈时仅通知关闭。
 
 ## 安装
 

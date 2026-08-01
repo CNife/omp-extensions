@@ -4,7 +4,7 @@
  * 用 stub CLI（test/fixtures/plannotator，环境契约见 stub 头注释）替换真实
  * plannotator 二进制，验证：
  *   /pnr 参数构造与通知、/pna 路径归一化与空参、/pnl 临时文件生命周期、
- *   stdout 反馈 -> sendUserMessage(followUp)、无反馈 / CLI 报错 / 二进制缺失通知。
+ *   stdout 反馈 -> sendUserMessage 直接发送（无 deliverAs）、无反馈 / CLI 报错 / 二进制缺失通知。
  * 断言文案与 extensions/index.ts 逐字一致。
  *
  * 运行：cd plugins/simple-plannotator && bun test
@@ -367,7 +367,7 @@ test("/pnl 无 assistant 消息: 错误通知且无副作用", async () => {
 // 用例 10/11/12/13: 反馈回路与失败路径
 // ============================================================================
 
-test("stdout 反馈 -> sendUserMessage(followUp)", async () => {
+test("stdout 反馈 -> sendUserMessage 直接发送（省略 deliverAs，空闲即触发回合）", async () => {
 	const { scratch } = setupScratch();
 	process.env.PLANNO_STUB_STDOUT = "请修复 X";
 	const pi = makePi();
@@ -376,7 +376,9 @@ test("stdout 反馈 -> sendUserMessage(followUp)", async () => {
 	pi.commands.get("pna").handler("docs.md", makeCtx(scratch, [], notified));
 
 	await waitFor(() => pi.sent.length > 0);
-	deepStrictEqual(pi.sent[0], { content: "请修复 X", opts: { deliverAs: "followUp" } });
+	// 不带 deliverAs：若带 "followUp"，omp 只入队不启动回合，反馈会静默滞留到
+	// 下一条显式输入（实测缺陷）；省略后空闲路径直接 prompt() 触发回合。
+	deepStrictEqual(pi.sent[0], { content: "请修复 X", opts: undefined });
 	ok(!notified.some((n) => n.type === "error"), "不应有错误通知");
 });
 

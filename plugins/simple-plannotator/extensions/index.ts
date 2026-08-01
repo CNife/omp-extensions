@@ -47,7 +47,10 @@ async function runPlannotator(
 
     const feedback = stdout.trim();
     if (feedback) {
-      pi.sendUserMessage(feedback, { deliverAs: "followUp" });
+      // 省略 deliverAs：显式 deliverAs（如 "followUp"）只入队不启动回合，空闲时
+      // 反馈会静默躺在队列里直到下一条显式输入；省略后空闲路径直接走 prompt()
+      // 启动回合，反馈立即作为用户消息进入会话。
+      pi.sendUserMessage(feedback);
     } else {
       ctx.ui.notify(`${label} closed (no feedback).`, "info");
     }
