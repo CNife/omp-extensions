@@ -30,6 +30,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 | [skills-injection](plugins/skills-injection/) | 交互式控制哪些技能被注入到系统提示词，持久化配置 |
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
 | [add-provider-models](plugins/add-provider-models/) | omp 加 provider+模型技能 + capture 验证扩展 |
+| [thinking-fold](plugins/thinking-fold/) | 推理块折叠预览：streaming 尾部预览 + 完成折叠 Thought for Xs + Ctrl+T 展开 |
 
 ## 添加新插件
 
