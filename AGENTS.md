@@ -25,7 +25,7 @@ omp-extensions/
 ## 添加插件
 
 1. 在 `plugins/` 下创建子目录，包含 `package.json`（声明 `omp.extensions` 和 `omp.skills`）、`extensions/`、`skills/` 等。
-2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。
+2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。条目需含 `version` 字段（与插件 `package.json` 的 `version` 一致）；每次更新插件代码时同步递增这两个 version，否则 `omp plugin upgrade`（不带参数）检测不到更新。
 3. 安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`
 
 > 本项目的插件通过 OMP marketplace 直接安装，**不要用 `omp plugin link`**。

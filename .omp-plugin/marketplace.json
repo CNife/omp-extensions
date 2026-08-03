@@ -8,32 +8,38 @@
     {
       "name": "nmem-sync",
       "description": "nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件",
-      "source": "./plugins/nmem-sync"
+      "source": "./plugins/nmem-sync",
+      "version": "0.1.0"
     },
     {
       "name": "simple-plannotator",
       "description": "Plannotator 浏览器审阅/标注，注入 /pnr /pna /pnl 三个斜杠命令",
-      "source": "./plugins/simple-plannotator"
+      "source": "./plugins/simple-plannotator",
+      "version": "0.1.0"
     },
     {
       "name": "prune-context",
       "description": "确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩",
-      "source": "./plugins/prune-context"
+      "source": "./plugins/prune-context",
+      "version": "0.2.0"
     },
     {
       "name": "skills-injection",
       "description": "交互式控制哪些技能被注入到系统提示词，持久化配置",
-      "source": "./plugins/skills-injection"
+      "source": "./plugins/skills-injection",
+      "version": "0.1.0"
     },
     {
       "name": "cache-miss-notices",
       "description": "显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices",
-      "source": "./plugins/cache-miss-notices"
+      "source": "./plugins/cache-miss-notices",
+      "version": "0.1.0"
     },
     {
       "name": "add-provider-models",
       "description": "omp 加 provider+模型技能 + capture 验证扩展",
-      "source": "./plugins/add-provider-models"
+      "source": "./plugins/add-provider-models",
+      "version": "0.1.0"
     }
   ]
 }
