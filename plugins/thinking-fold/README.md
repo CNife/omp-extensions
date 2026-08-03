@@ -40,7 +40,7 @@ omp plugin upgrade thinking-fold
 
 ## 调整预览行数
 
-预览行数默认为 10。修改 `plugins/thinking-fold/renderer.ts` 中 `DEFAULT_THINKING_FOLD_OPTIONS.previewLines`，或将 `installThinkingFoldPatch({ previewLines: N })` 的初始选项改为期望值，然后重新安装/升级插件。
+预览行数默认为 7。修改 `plugins/thinking-fold/renderer.ts` 中 `DEFAULT_THINKING_FOLD_OPTIONS.previewLines`，或将 `installThinkingFoldPatch({ previewLines: N })` 的初始选项改为期望值，然后重新安装/升级插件。
 
 ## 兼容性说明
 

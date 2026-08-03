@@ -26,7 +26,7 @@ export interface ThinkingTiming {
 export const DEFAULT_THINKING_CURSOR_LABEL = "Thinking...";
 
 export const DEFAULT_THINKING_FOLD_OPTIONS: ThinkingFoldOptions = {
-  previewLines: 10,
+  previewLines: 7,
   toggleKey: "ctrl+t",
 };
 

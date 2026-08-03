@@ -45,7 +45,7 @@
       "name": "thinking-fold",
       "description": "推理块折叠预览：streaming 尾部预览 + 完成折叠 Thought for Xs + Ctrl+T 展开",
       "source": "./plugins/thinking-fold",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

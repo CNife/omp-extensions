@@ -1,6 +1,6 @@
 {
   "name": "thinking-fold",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "推理块折叠预览：尾部预览 + 完成折叠 + Ctrl+T 展开",
   "private": true,
   "license": "MIT",
