@@ -10,12 +10,12 @@
  *   <空行>
  *   - toolName({"arg":"value"}) #行号.索引
  *   <空行>
- *   **toolResult** (toolName, error):
- *   ```
- *   error content
- *   ```
+ *   - glob #行号.索引（空参数无括号；单 toolCall 时锚点省略 .1）
  *   <空行>
- *   **bash**: `command`
+ *   **toolResult** (toolName, error|ok):
+ *   ```
+ *   content
+ *   ```
  *   ...
  *
  * 纯函数，无副作用，可独立测试。
@@ -23,10 +23,9 @@
 
 import type { PrunedEntry } from "./prune.ts";
 
-/** 将 args 对象渲染为紧凑 JSON 字符串。 */
+/** 将 args 对象渲染为紧凑 JSON 字符串（空对象返回 ""）。 */
 function renderArgs(args: Record<string, unknown>): string {
-  const keys = Object.keys(args);
-  if (keys.length === 0) return "";
+  if (Object.keys(args).length === 0) return "";
   return JSON.stringify(args);
 }
 
@@ -37,26 +36,17 @@ function renderEntry(entry: PrunedEntry): string {
       return `**${entry.role}**: ${entry.text}`;
 
     case "toolCall": {
-      const argsStr = renderArgs(entry.args);
       const anchor = entry.anchor ? ` ${entry.anchor}` : "";
-      return `- ${entry.name}(${argsStr})${anchor}`;
+      const argsStr = renderArgs(entry.args);
+      // 空参数（如 glob 占位）不显示括号
+      return argsStr
+        ? `- ${entry.name}(${argsStr})${anchor}`
+        : `- ${entry.name}${anchor}`;
     }
 
-    case "toolResultFailed":
-      return `**toolResult** (${entry.toolName}, error):\n\`\`\`\n${entry.content}\n\`\`\``;
-
-    case "bashSuccess":
-      return `**bash**: \`${entry.command}\``;
-
-    case "bashFailed": {
-      const status = entry.cancelled
-        ? "cancelled"
-        : `exit ${entry.exitCode ?? "?"}`;
-      let result = `**bash** (${status}): \`${entry.command}\``;
-      if (entry.output) {
-        result += `\n\`\`\`\n${entry.output}\n\`\`\``;
-      }
-      return result;
+    case "toolResultKept": {
+      const status = entry.isError ? "error" : "ok";
+      return `**toolResult** (${entry.toolName}, ${status}):\n\`\`\`\n${entry.content}\n\`\`\``;
     }
   }
 }
