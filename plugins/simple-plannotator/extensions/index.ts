@@ -29,8 +29,13 @@ async function runPlannotator(
 ): Promise<void> {
   // plannotator 偶发进程内死锁（futex 阻塞，不写 stdout、不退出，~20% 概率）：
   // 裸 await Promise.all([stdout, stderr, exited]) 会永久挂起 -> "卡死"。
-  // 加超时：到点 kill 进程并通知用户重试（反馈只走 stdout，卡死时不可恢复）。
-  const timeoutMs = Number(Bun.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS) || 120_000;
+  // 超时是进程总寿命上限（spawn -> 退出），覆盖整个审阅期：反馈在点击
+  // Send Feedback 时才一次性写 stdout，审阅期间进程静默存活是正常形态。
+  // 窗口必须按"人类审阅时长"取值（文档审阅几十分钟常见），而非投递耗时
+  // （#38 实测正常投递 29-55s）——旧默认 120s 只够投递尺度，正常慢审阅
+  // 会被误杀、反馈丢失。到点 kill 进程并通知重试（反馈只走 stdout，
+  // 卡死时不可恢复）；审阅超过上限可 env 调大。
+  const timeoutMs = resolveFeedbackTimeoutMs();
   try {
     const proc = Bun.spawn(["plannotator", ...args], {
       cwd: ctx.cwd,
@@ -65,7 +70,7 @@ async function runPlannotator(
         /* already exited */
       }
       ctx.ui.notify(
-        `${label} timed out waiting for feedback (plannotator may have hung). Please retry.`,
+        `${label} timed out waiting for feedback (plannotator may have hung, or the review session exceeded the limit). Retry, or raise PLANNOTATOR_FEEDBACK_TIMEOUT_MS (current: ${timeoutMs}ms).`,
         "error",
       );
       return;
@@ -104,6 +109,15 @@ async function runPlannotator(
   } finally {
     cleanup?.();
   }
+}
+
+/**
+ * 反馈等待超时 = 进程总寿命上限。env 覆盖优先（非法值回退默认），
+ * 默认 30min：按人类审阅时长取值，而非投递耗时（背景见调用处注释）。
+ */
+export function resolveFeedbackTimeoutMs(): number {
+  const env = Number(Bun.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS);
+  return env > 0 && Number.isFinite(env) ? env : 30 * 60 * 1000;
 }
 
 // ── Path normalization (ported from pi simple-plannotator) ──────────────────

@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import simplePlannotator from "../extensions/index.ts";
+import simplePlannotator, { resolveFeedbackTimeoutMs } from "../extensions/index.ts";
 
 // ── Bun.spawn 包装：注入当前 process.env（见文件头机制说明）──────────────
 const realSpawn = Bun.spawn.bind(Bun);
@@ -103,6 +103,7 @@ function setupScratch() {
 	delete process.env.PLANNO_STUB_STDERR;
 	delete process.env.PLANNO_STUB_EXIT;
 	delete process.env.PLANNO_STUB_HANG;
+	delete process.env.PLANNO_STUB_SLEEP;
 	delete process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
 	return { scratch, stubLog };
 }
@@ -423,7 +424,7 @@ test("无反馈 -> closed (no feedback) 通知，不调 sendUserMessage", async 
 test("plannotator 卡死（不写 stdout、不退出）-> 超时 kill + 错误通知，不永久挂起", async () => {
 	const { scratch, stubLog } = setupScratch();
 	process.env.PLANNO_STUB_HANG = "1";
-	// 缩短超时让测试快速出红；扩展默认 120s。
+	// 缩短超时让测试快速出红；扩展默认 30min（审阅尺度）。
 	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "300";
 	const pi = makePi();
 	simplePlannotator(pi);
@@ -446,6 +447,53 @@ test("plannotator 卡死（不写 stdout、不退出）-> 超时 kill + 错误�
 	);
 	equal(pi.sent.length, 0, "卡死时不应发用户消息");
 	ok(existsSync(stubLog), "stub 应已 spawn（确认走的是真实子进程路径）");
+});
+
+test("慢审阅但在窗口内：审阅期后的反馈照常送达", async () => {
+	const { scratch, stubLog } = setupScratch();
+	// stub 的 PLANNO_STUB_SLEEP 模拟"人在浏览器里读文档"：进程先静默存活
+	// 整个审阅期，之后才写反馈 stdout 并退出 —— 与真实 plannotator 形态一致。
+	// 审阅期（600ms）在窗口（3000ms）内，反馈必须送达而非被 kill。
+	process.env.PLANNO_STUB_SLEEP = "0.6";
+	process.env.PLANNO_STUB_STDOUT = "late but precious feedback";
+	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "3000";
+	const pi = makePi();
+	simplePlannotator(pi);
+	const notified: { msg: string; type: string }[] = [];
+	pi.commands.get("pna").handler("doc.md", makeCtx(scratch, [], notified));
+
+	await waitFor(
+		() => pi.sent.length > 0 || notified.some((n) => /timed out/i.test(n.msg)),
+		5000,
+	);
+
+	equal(
+		notified.some((n) => /timed out/i.test(n.msg)),
+		false,
+		"窗口内的审阅不应被超时 kill",
+	);
+	equal(pi.sent.length, 1, "反馈应送达 sendUserMessage");
+	ok(pi.sent[0].content.includes("late but precious feedback"));
+	ok(existsSync(stubLog), "stub 应已 spawn（确认走的是真实子进程路径）");
+});
+
+test("超时契约: 默认 30min（审阅尺度），env 覆盖优先，非法值回退默认", () => {
+	const saved = process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
+	try {
+		delete process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
+		equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, "默认应为 30min");
+		process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "5000";
+		equal(resolveFeedbackTimeoutMs(), 5000, "合法 env 覆盖应生效");
+		process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "not-a-number";
+		equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, "非法值应回退默认");
+		process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "0";
+		equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, "0 应回退默认");
+		process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "-100";
+		equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, "负值应回退默认");
+	} finally {
+		if (saved === undefined) delete process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
+		else process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = saved;
+	}
 });
 
 test("CLI 报错: stderr 优先", async () => {
