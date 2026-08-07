@@ -47,11 +47,16 @@ async function runPlannotator(
     const timeout = new Promise<"timeout">((resolve) => {
       timer = setTimeout(() => resolve("timeout"), timeoutMs);
     });
-    const outcome = await Promise.race([
-      delivery.then(([stdout, stderr, exitCode]) => ({ stdout, stderr, exitCode })),
-      timeout,
-    ]);
-    clearTimeout(timer);
+    let outcome;
+    try {
+      outcome = await Promise.race([
+        delivery.then(([stdout, stderr, exitCode]) => ({ stdout, stderr, exitCode })),
+        timeout,
+      ]);
+    } finally {
+      // delivery reject 时 race 直接 reject -> 外层 catch；finally 保证定时器不残留。
+      clearTimeout(timer);
+    }
 
     if (outcome === "timeout") {
       try {
