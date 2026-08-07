@@ -1,6 +1,6 @@
 {
   "name": "simple-plannotator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Plannotator 浏览器审阅/标注，注入三个斜杠命令",
   "private": true,
   "license": "MIT",

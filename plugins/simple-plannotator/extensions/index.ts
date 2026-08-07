@@ -27,6 +27,10 @@ async function runPlannotator(
   cleanup?: () => void,
   feedbackPrefix?: string,
 ): Promise<void> {
+  // plannotator 偶发进程内死锁（futex 阻塞，不写 stdout、不退出，~20% 概率）：
+  // 裸 await Promise.all([stdout, stderr, exited]) 会永久挂起 -> "卡死"。
+  // 加超时：到点 kill 进程并通知用户重试（反馈只走 stdout，卡死时不可恢复）。
+  const timeoutMs = Number(Bun.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS) || 120_000;
   try {
     const proc = Bun.spawn(["plannotator", ...args], {
       cwd: ctx.cwd,
@@ -34,11 +38,40 @@ async function runPlannotator(
       stderr: "pipe",
       stdin: "ignore",
     });
-    const [stdout, stderr, exitCode] = await Promise.all([
+    const delivery = Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
       proc.exited,
     ]);
+    let timer;
+    const timeout = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), timeoutMs);
+    });
+    let outcome;
+    try {
+      outcome = await Promise.race([
+        delivery.then(([stdout, stderr, exitCode]) => ({ stdout, stderr, exitCode })),
+        timeout,
+      ]);
+    } finally {
+      // delivery reject 时 race 直接 reject -> 外层 catch；finally 保证定时器不残留。
+      clearTimeout(timer);
+    }
+
+    if (outcome === "timeout") {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        /* already exited */
+      }
+      ctx.ui.notify(
+        `${label} timed out waiting for feedback (plannotator may have hung). Please retry.`,
+        "error",
+      );
+      return;
+    }
+
+    const { stdout, stderr, exitCode } = outcome;
 
     if (exitCode !== 0 && !stdout.trim()) {
       const detail = stderr.trim() || `exit code ${exitCode}`;
