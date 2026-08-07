@@ -346,43 +346,44 @@ test("formatSummary: glob 占位无括号", () => {
 		[assistantCalls({ name: "glob", arguments: { path: "**/*.ts", i: "x" } })],
 		[5],
 	);
-	const summary = formatSummary(entries, 1);
+	const summary = formatSummary(entries);
 	ok(summary.includes("- glob #5"), `expected glob placeholder, got:\n${summary}`);
 	ok(!summary.includes("glob("), `glob should have no parens, got:\n${summary}`);
 });
 
 test("formatSummary: toolResultKept error 标注", () => {
 	const entries = pruneMessages([toolResult("read", "not found", true)]);
-	const summary = formatSummary(entries, 1);
-	ok(summary.includes("**toolResult** (read, error):"), `got:\n${summary}`);
+	const summary = formatSummary(entries);
+	ok(summary.includes('<result tool="read" status="error">'), `got:\n${summary}`);
 });
 
 test("formatSummary: toolResultKept ok 标注", () => {
 	const entries = pruneMessages([toolResult("ask", "user said yes", false)]);
-	const summary = formatSummary(entries, 1);
-	ok(summary.includes("**toolResult** (ask, ok):"), `got:\n${summary}`);
+	const summary = formatSummary(entries);
+	ok(summary.includes('<result tool="ask" status="ok">'), `got:\n${summary}`);
 });
 
 test("formatSummary: edit hashline 显示 paths", () => {
 	const entries = pruneMessages([
 		assistantCalls({ name: "edit", arguments: { input: HASHLINE_MULTI, i: "x" } }),
 	]);
-	const summary = formatSummary(entries, 1);
-	ok(summary.includes('edit({"paths":["src/a.ts","src/b.ts"]}'), `got:\n${summary}`);
+	const summary = formatSummary(entries);
+	ok(summary.includes("- edit src/a.ts src/b.ts"), `got:\n${summary}`);
 });
 
-test("formatSummary: 普通 toolCall 带参数渲染", () => {
+test("formatSummary: 普通 toolCall 渲染 path", () => {
 	const entries = pruneMessages([
 		assistantCalls({ name: "read", arguments: { path: "f.ts", i: "x" } }),
 	]);
-	const summary = formatSummary(entries, 1, ["f.ts"]);
-	ok(summary.includes("Files: f.ts"), `got:\n${summary}`);
-	ok(summary.includes("- read("), `got:\n${summary}`);
+	const summary = formatSummary(entries);
+	ok(!summary.includes("Files:"), `should not have files header, got:\n${summary}`);
+	ok(!summary.includes('"i"'), `should not render intent, got:\n${summary}`);
+	ok(summary.includes("- read f.ts"), `got:\n${summary}`);
 });
 
-test("formatSummary: header 统计行", () => {
-	const summary = formatSummary([], 42, []);
-	ok(summary.startsWith("Pruned 42 messages."), `got:\n${summary}`);
+test("formatSummary: 空条目返回空串", () => {
+	const summary = formatSummary([]);
+	strictEqual(summary, "", `got:\n${summary}`);
 });
 
 // ============================================================================
@@ -417,81 +418,84 @@ test("extractFiles: 去重 + 保序", () => {
 const SESSION_FILE =
 	"/home/cnife/.omp/agent/sessions/-code-omp-extensions/2026-08-05T13-35-02-501Z_019fd222-7965-7000-8e85-482a80dcdee1.jsonl";
 
-test("integration: 真实 omp session 裁剪（hashline edit + glob + grep + ask + bash）", { skip: !existsSync(SESSION_FILE) ? "环境相关：真实 session 文件不存在" : false }, () => {
-	const lines = readFileSync(SESSION_FILE, "utf-8").split("\n").filter((l) => l.trim());
-	const messages: MessageLike[] = [];
-	for (const line of lines) {
-		let entry;
-		try {
-			entry = JSON.parse(line);
-		} catch {
-			continue;
+	test("integration: 真实 omp session 裁剪（hashline edit + glob + grep + ask + bash）", { skip: !existsSync(SESSION_FILE) ? "环境相关：真实 session 文件不存在" : false }, () => {
+		const lines = readFileSync(SESSION_FILE, "utf-8").split("\n").filter((l) => l.trim());
+		const messages: MessageLike[] = [];
+		for (const line of lines) {
+			let entry;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+			if (entry.type === "message" && entry.message) {
+				messages.push(entry.message as MessageLike);
+			}
 		}
-		if (entry.type === "message" && entry.message) {
-			messages.push(entry.message as MessageLike);
+		ok(messages.length > 50, `expected substantial session, got ${messages.length} messages`);
+
+		const entries = pruneMessages(messages);
+		const summary = formatSummary(entries);
+
+		// 不含 bashExecution / custom 渲染产物
+		ok(!summary.includes("**bash**:"), `should not render bashExecution, got bashSuccess in:\n${summary.slice(0, 200)}`);
+
+		// edit hashline 的 input 不泄露到 summary
+		ok(!summary.includes("PUT "), `hashline input body should be pruned, got PUT in summary`);
+
+		// glob 占位无括号
+		const globLines = summary.split("\n").filter((l) => l.startsWith("- glob"));
+		for (const gl of globLines) {
+			ok(!gl.includes("glob("), `glob should have no parens: ${gl}`);
 		}
-	}
-	ok(messages.length > 50, `expected substantial session, got ${messages.length} messages`);
 
-	const entries = pruneMessages(messages);
-	const summary = formatSummary(entries, messages.length, extractFiles(messages));
+		// edit hashline 渲染内联 path（非 JSON）
+		const editLines = summary.split("\n").filter((l) => l.startsWith("- edit "));
+		ok(editLines.length > 0, `expected edit toolCalls with inline paths, got none`);
+		for (const el of editLines) {
+			ok(!el.includes('"paths"'), `edit should render inline paths not JSON: ${el}`);
+			ok(!el.includes("{"), `edit should have no JSON braces: ${el}`);
+		}
 
-	// 不含 bashExecution / custom 渲染产物
-	ok(!summary.includes("**bash**:"), `should not render bashExecution, got bashSuccess in:\n${summary.slice(0, 200)}`);
-
-	// edit hashline 的 input 不泄露到 summary
-	ok(!summary.includes("PUT "), `hashline input body should be pruned, got PUT in summary`);
-
-	// glob 占位无括号
-	const globLines = summary.split("\n").filter((l) => l.startsWith("- glob"));
-	for (const gl of globLines) {
-		ok(!gl.includes("glob("), `glob should have no parens: ${gl}`);
-	}
-
-	// 至少有一个 edit toolCall 显示 paths
-	const editLines = summary.split("\n").filter((l) => l.startsWith("- edit("));
-	ok(editLines.length > 0, `expected edit toolCalls with paths, got none`);
-	for (const el of editLines) {
-		ok(el.includes('"paths"'), `edit should show paths: ${el}`);
-	}
-
-	// summary 非空且有 header
-	ok(summary.startsWith("Pruned "), `expected header, got: ${summary.slice(0, 60)}`);
-});
+		// summary 非空、无统计 header
+		ok(summary.length > 0, `expected non-empty summary`);
+		ok(!summary.includes("Pruned "), `should have no stats header: ${summary.slice(0, 60)}`);
+	});
 
 const SESSION_FILE_2 =
 	"/home/cnife/.omp/agent/sessions/-code-omp-extensions/2026-08-01T13-37-40-664Z_019fbd8b-7338-7000-b11d-df618701ecb8.jsonl";
 
-test("integration: 真实 omp session 裁剪（replace-batch edit + 六种工具）", { skip: !existsSync(SESSION_FILE_2) ? "环境相关：真实 session 文件不存在" : false }, () => {
-	const lines = readFileSync(SESSION_FILE_2, "utf-8").split("\n").filter((l) => l.trim());
-	const messages: MessageLike[] = [];
-	for (const line of lines) {
-		let entry;
-		try {
-			entry = JSON.parse(line);
-		} catch {
-			continue;
+	test("integration: 真实 omp session 裁剪（replace-batch edit + 六种工具）", { skip: !existsSync(SESSION_FILE_2) ? "环境相关：真实 session 文件不存在" : false }, () => {
+		const lines = readFileSync(SESSION_FILE_2, "utf-8").split("\n").filter((l) => l.trim());
+		const messages: MessageLike[] = [];
+		for (const line of lines) {
+			let entry;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+			if (entry.type === "message" && entry.message) {
+				messages.push(entry.message as MessageLike);
+			}
 		}
-		if (entry.type === "message" && entry.message) {
-			messages.push(entry.message as MessageLike);
+		ok(messages.length > 100, `expected substantial session, got ${messages.length} messages`);
+
+		const entries = pruneMessages(messages);
+		const summary = formatSummary(entries);
+
+		// edit（含 replace-batch 非 hashline）渲染为 toolCall 行，无 JSON
+		const editLines = summary.split("\n").filter((l) => l.startsWith("- edit"));
+		ok(editLines.length > 0, `expected edit toolCalls, got none`);
+		for (const el of editLines) {
+			ok(!el.includes('"paths"'), `edit should not render JSON paths: ${el}`);
+			ok(!el.includes("{"), `edit should have no JSON braces: ${el}`);
 		}
-	}
-	ok(messages.length > 100, `expected substantial session, got ${messages.length} messages`);
 
-	const entries = pruneMessages(messages);
-	const summary = formatSummary(entries, messages.length, extractFiles(messages));
+		// 不含 bashExecution 渲染产物（**bash**: 格式）
+		ok(!summary.includes("**bash**:"), `should not render bashExecution`);
 
-	// replace-batch edit（无 input 字段）应保留全参数（含 edits/old_text/new_text）
-	const editLines = summary.split("\n").filter((l) => l.startsWith("- edit("));
-	ok(editLines.length > 0, `expected edit toolCalls, got none`);
-	for (const el of editLines) {
-		// 非 hashline 模式不裁剪，应保留原始参数键
-		ok(!el.includes('"paths"'), `replace-batch edit should keep original args, not extract paths: ${el}`);
-	}
-
-	// 不含 bashExecution 渲染产物（**bash**: 格式）
-	ok(!summary.includes("**bash**:"), `should not render bashExecution`);
-
-	// summary 非空且有 header
-	ok(summary.startsWith("Pruned "), `expected header, got: ${summary.slice(0, 60)}`);
-});
+		// summary 非空、无统计 header
+		ok(summary.length > 0, `expected non-empty summary`);
+		ok(!summary.includes("Pruned "), `should have no stats header: ${summary.slice(0, 60)}`);
+	});

@@ -1,6 +1,6 @@
 {
   "name": "prune-context",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩",
   "private": true,
   "license": "MIT",
