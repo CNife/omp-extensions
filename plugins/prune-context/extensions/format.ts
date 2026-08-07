@@ -1,90 +1,111 @@
 /**
  * format - 将 PrunedEntry[] 渲染为 summary 字符串。
  *
- * 输出格式：
- *   Pruned N messages. Files: file1, file2, ...
- *   <空行>
+ * 输出格式（干净上下文，零统计噪音）：
  *   [previousSummary 原样透传（如有）]
  *   <空行>
- *   **role**: text
+ *   <user>
+ *   text
+ *   </user>
  *   <空行>
- *   - toolName({"arg":"value"}) #行号.索引
- *   <空行>
- *   - glob #行号.索引（空参数无括号；单 toolCall 时锚点省略 .1）
- *   <空行>
- *   **toolResult** (toolName, error|ok):
- *   ```
+ *   <assistant>
+ *   text
+ *   </assistant>
+ *   - read src/foo.ts #5          ← toolCall：工具名 + 主参数(path) + 锚点
+ *   - glob #11                    ← 无 path 参数时省略
+ *   <result tool="ask" status="ok">
  *   content
- *   ```
- *   ...
+ *   </result>
+ *
+ * 成组规则（视觉聚合，减少空行噪音）：
+ *   - text 块前留空行（首个除外）
+ *   - toolCall 紧跟前一条（text 或 toolCall），不留空行
+ *   - toolResultKept 紧跟其 toolCall，不留空行
+ *   - toolCall 跟在 toolResultKept 后时留空行（新一轮开始）
  *
  * 纯函数，无副作用，可独立测试。
  */
 
 import type { PrunedEntry } from "./prune.ts";
 
-/** 将 args 对象渲染为紧凑 JSON 字符串（空对象返回 ""）。 */
-function renderArgs(args: Record<string, unknown>): string {
-  if (Object.keys(args).length === 0) return "";
-  return JSON.stringify(args);
+/** path 类参数键（按优先级），用于 toolCall 行内联渲染。 */
+const PATH_KEYS = ["path", "file_path", "filePath"] as const;
+
+/**
+ * 提取 toolCall args 中的 path 类参数，空格连接。
+ * 仅渲染 path（文件操作工具的目标），其余参数（intent/command/pattern 等）
+ * 不渲染——需要时用 recall_pruned_tool_call 按锚点恢复。
+ */
+function renderToolCallArgs(args: Record<string, unknown>): string {
+  const paths: string[] = [];
+  for (const key of PATH_KEYS) {
+    const v = args[key];
+    if (typeof v === "string" && v) paths.push(v);
+  }
+  const p = args.paths;
+  if (Array.isArray(p)) {
+    for (const item of p) {
+      if (typeof item === "string" && item) paths.push(item);
+    }
+  }
+  return paths.join(" ");
 }
 
-/** 渲染单个 PrunedEntry 为字符串行（可能多行）。 */
+/** 渲染单个 PrunedEntry 为字符串（可能多行）。 */
 function renderEntry(entry: PrunedEntry): string {
   switch (entry.kind) {
     case "text":
-      return `**${entry.role}**: ${entry.text}`;
+      return `<${entry.role}>\n${entry.text}\n</${entry.role}>`;
 
     case "toolCall": {
+      const pathStr = renderToolCallArgs(entry.args);
       const anchor = entry.anchor ? ` ${entry.anchor}` : "";
-      const argsStr = renderArgs(entry.args);
-      // 空参数（如 glob 占位）不显示括号
-      return argsStr
-        ? `- ${entry.name}(${argsStr})${anchor}`
+      return pathStr
+        ? `- ${entry.name} ${pathStr}${anchor}`
         : `- ${entry.name}${anchor}`;
     }
 
     case "toolResultKept": {
       const status = entry.isError ? "error" : "ok";
-      return `**toolResult** (${entry.toolName}, ${status}):\n\`\`\`\n${entry.content}\n\`\`\``;
+      return `<result tool="${entry.toolName}" status="${status}">\n${entry.content}\n</result>`;
     }
   }
+}
+
+/**
+ * 当前条目前是否需要空行（成组规则）。仅在存在前一条时调用。
+ */
+function needsBlankBefore(prev: PrunedEntry, cur: PrunedEntry): boolean {
+  if (cur.kind === "text") return true;
+  if (cur.kind === "toolCall") return prev.kind === "toolResultKept";
+  // toolResultKept：紧跟其 toolCall，不留空行
+  return false;
 }
 
 /**
  * 将裁剪条目渲染为 summary 字符串。
  *
  * @param entries - pruneMessages 输出的 PrunedEntry[]
- * @param totalMessageCount - 裁剪前的消息总数（用于首行统计）
- * @param files - 文件列表（从 toolCall args 派生）
  * @param previousSummary - 迭代压缩时上一轮的 summary，原样透传在顶部
  */
 export function formatSummary(
   entries: PrunedEntry[],
-  totalMessageCount: number,
-  files?: string[],
   previousSummary?: string,
 ): string {
-  // 首行统计
-  let header = `Pruned ${totalMessageCount} messages.`;
-  if (files && files.length > 0) {
-    header += ` Files: ${files.join(", ")}`;
-  }
-
-  const lines: string[] = [header, ""];
-
+  const parts: string[] = [];
   if (previousSummary) {
-    lines.push(previousSummary, "");
+    parts.push(previousSummary);
   }
 
-  for (const entry of entries) {
-    lines.push(renderEntry(entry), "");
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const rendered = renderEntry(entry);
+    const needBlank = i === 0
+      ? previousSummary != null
+      : needsBlankBefore(entries[i - 1], entry);
+    if (needBlank) parts.push("");
+    parts.push(rendered);
   }
 
-  // 去掉末尾多余空行
-  while (lines.length > 0 && lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-
-  return lines.join("\n");
+  return parts.join("\n");
 }

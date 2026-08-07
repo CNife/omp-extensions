@@ -180,12 +180,7 @@ export default function (pi: any) {
     const messages = liveMessages.map((lm) => lm.message);
     const entries = pruneMessages(messages, messageLineNumbers);
     const files = extractFiles(messages);
-    const summary = formatSummary(
-      entries,
-      messages.length,
-      files,
-      preparation.previousSummary,
-    );
+    const summary = formatSummary(entries, preparation.previousSummary);
 
     return {
       compaction: {
