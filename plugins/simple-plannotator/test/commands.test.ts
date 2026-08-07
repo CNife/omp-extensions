@@ -102,7 +102,8 @@ function setupScratch() {
 	delete process.env.PLANNO_STUB_STDOUT;
 	delete process.env.PLANNO_STUB_STDERR;
 	delete process.env.PLANNO_STUB_EXIT;
-	delete process.env.PLANNO_STUB_SLEEP;
+	delete process.env.PLANNO_STUB_HANG;
+	delete process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
 	return { scratch, stubLog };
 }
 
@@ -417,6 +418,34 @@ test("无反馈 -> closed (no feedback) 通知，不调 sendUserMessage", async 
 		"应为 info 通知",
 	);
 	equal(pi.sent.length, 0, "不应发用户消息");
+});
+
+test("plannotator 卡死（不写 stdout、不退出）-> 超时 kill + 错误通知，不永久挂起", async () => {
+	const { scratch, stubLog } = setupScratch();
+	process.env.PLANNO_STUB_HANG = "1";
+	// 缩短超时让测试快速出红；扩展默认 120s。
+	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "300";
+	const pi = makePi();
+	simplePlannotator(pi);
+	const notified: { msg: string; type: string }[] = [];
+	pi.commands.get("pna").handler("docs.md", makeCtx(scratch, [], notified));
+
+	// stub 已 spawn（写了 stub.log）但永不写 stdout、永不退出 -> 扩展超时恢复。
+	await waitFor(
+		() => notified.some((n) => n.type === "error" && /timed out/i.test(n.msg)),
+		5000,
+	);
+	ok(
+		notified.some(
+			(n) =>
+				n.type === "error" &&
+				/timed out/i.test(n.msg) &&
+				/retry/i.test(n.msg),
+		),
+		"应发超时错误通知并提示重试",
+	);
+	equal(pi.sent.length, 0, "卡死时不应发用户消息");
+	ok(existsSync(stubLog), "stub 应已 spawn（确认走的是真实子进程路径）");
 });
 
 test("CLI 报错: stderr 优先", async () => {

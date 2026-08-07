@@ -46,3 +46,7 @@ omp plugin link ./plugins/simple-plannotator
 - `/pnl` → 从 OMP 会话提取最后一条 assistant 消息，写入临时 `.md` 文件后调用 `plannotator annotate <tmpfile>`（`plannotator last` 无法识别 OMP 会话日志格式，故走此路径）
 
 进程非阻塞：命令立即返回，浏览器关闭后异步将反馈发回 agent。
+
+## 已知问题与容错
+
+`plannotator` 0.25.x 偶发进程内死锁（点击 Send Feedback 后卡在 "Sending..."，不写 stdout、不退出，约 20% 概率）。扩展对反馈等待加了超时（默认 120s，可用环境变量 `PLANNOTATOR_FEEDBACK_TIMEOUT_MS` 覆盖）：到点未投递则 kill 进程并通知用户重试，避免 omp 永久卡死。反馈只经 stdout 投递，卡死时无法从文件恢复，重试即可（多数情况下一次成功）。
