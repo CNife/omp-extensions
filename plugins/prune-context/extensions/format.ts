@@ -11,8 +11,9 @@
  *   <assistant>
  *   text
  *   </assistant>
- *   - read src/foo.ts #5          ← toolCall：工具名 + 主参数(path) + 锚点
- *   - glob #11                    ← 无 path 参数时省略
+ *   - read src/foo.ts #5          ← toolCall：path 类参数 + 锚点
+ *   - bash ls -la #5              ← 非 path 工具主参数（command 等）全量内联
+ *   - glob #11                    ← 无参数时省略
  *   <result tool="ask" status="ok">
  *   content
  *   </result>

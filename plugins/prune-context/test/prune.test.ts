@@ -426,13 +426,18 @@ test("formatSummary: ask 全量内联 questions", () => {
 	ok(summary.includes("- ask "), `got:\n${summary}`);
 });
 
-test("formatSummary: todo 全量内联 op + task", () => {
+test("formatSummary: todo 全量内联 op + task + phase", () => {
 	const entries = pruneMessages(
-		[assistantCalls({ name: "todo", arguments: { op: "done", task: "写测试", i: "x" } })],
+		[
+			assistantCalls({
+				name: "todo",
+				arguments: { op: "done", task: "写测试", phase: "验证", i: "x" },
+			}),
+		],
 		[5],
 	);
 	const summary = formatSummary(entries);
-	ok(summary.includes("- todo done 写测试 #5"), `got:\n${summary}`);
+	ok(summary.includes("- todo done 写测试 验证 #5"), `got:\n${summary}`);
 });
 
 // ============================================================================
