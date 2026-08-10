@@ -34,6 +34,12 @@
       "description": "omp 加 provider+模型技能 + capture 验证扩展",
       "source": "./plugins/add-provider-models",
       "version": "0.1.0"
+    },
+    {
+      "name": "plannotator-cli",
+      "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
+      "source": "./plugins/plannotator-cli",
+      "version": "0.1.0"
     }
   ]
 }

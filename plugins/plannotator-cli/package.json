@@ -1,0 +1,23 @@
+{
+  "name": "plannotator-cli",
+  "version": "0.1.0",
+  "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
+  "private": true,
+  "license": "MIT",
+  "author": "CNife <CNife@vip.qq.com>",
+  "homepage": "https://github.com/CNife/omp-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNife/omp-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CNife/omp-extensions/issues"
+  },
+  "omp": {
+    "extensions": ["./extensions/index.ts"]
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^7.0.2"
+  }
+}
