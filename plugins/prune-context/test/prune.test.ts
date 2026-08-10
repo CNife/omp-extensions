@@ -386,6 +386,55 @@ test("formatSummary: 空条目返回空串", () => {
 	strictEqual(summary, "", `got:\n${summary}`);
 });
 
+test("formatSummary: bash 全量内联 command", () => {
+	const entries = pruneMessages(
+		[assistantCalls({ name: "bash", arguments: { command: "ls -la", i: "x" } })],
+		[5],
+	);
+	const summary = formatSummary(entries);
+	ok(summary.includes("- bash ls -la #5"), `got:\n${summary}`);
+	ok(!summary.includes('"i"'), `should not render intent: ${summary}`);
+});
+
+test("formatSummary: bash 多行 command 单行化", () => {
+	const entries = pruneMessages(
+		[assistantCalls({ name: "bash", arguments: { command: "echo a\necho b", i: "x" } })],
+		[5],
+	);
+	const summary = formatSummary(entries);
+	ok(summary.includes("- bash echo a echo b #5"), `got:\n${summary}`);
+	const lines = summary.split("\n");
+	ok(lines.some((l) => l.startsWith("- bash ") && l.includes("#5")), `bash should be single line: ${summary}`);
+});
+
+test("formatSummary: grep 全量内联 pattern + path", () => {
+	const entries = pruneMessages(
+		[assistantCalls({ name: "grep", arguments: { pattern: "foo", path: "src/", i: "x" } })],
+		[5],
+	);
+	const summary = formatSummary(entries);
+	ok(summary.includes("- grep src/ foo #5"), `got:\n${summary}`);
+});
+
+test("formatSummary: ask 全量内联 questions", () => {
+	const entries = pruneMessages(
+		[assistantCalls({ name: "ask", arguments: { questions: [{ id: "q1", question: "which?" }], i: "x" } })],
+		[5],
+	);
+	const summary = formatSummary(entries);
+	ok(summary.includes("which?"), `questions content should be inlined: ${summary}`);
+	ok(summary.includes("- ask "), `got:\n${summary}`);
+});
+
+test("formatSummary: todo 全量内联 op + task", () => {
+	const entries = pruneMessages(
+		[assistantCalls({ name: "todo", arguments: { op: "done", task: "写测试", i: "x" } })],
+		[5],
+	);
+	const summary = formatSummary(entries);
+	ok(summary.includes("- todo done 写测试 #5"), `got:\n${summary}`);
+});
+
 // ============================================================================
 // extractFiles
 // ============================================================================
