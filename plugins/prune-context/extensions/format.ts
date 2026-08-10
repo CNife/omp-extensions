@@ -11,8 +11,9 @@
  *   <assistant>
  *   text
  *   </assistant>
- *   - read src/foo.ts #5          ← toolCall：工具名 + 主参数(path) + 锚点
- *   - glob #11                    ← 无 path 参数时省略
+ *   - read src/foo.ts #5          ← toolCall：path 类参数 + 锚点
+ *   - bash ls -la #5              ← 非 path 工具主参数（command 等）全量内联
+ *   - glob #11                    ← 无参数时省略
  *   <result tool="ask" status="ok">
  *   content
  *   </result>
@@ -32,11 +33,22 @@ import type { PrunedEntry } from "./prune.ts";
 const PATH_KEYS = ["path", "file_path", "filePath"] as const;
 
 /**
- * 提取 toolCall args 中的 path 类参数，空格连接。
- * 仅渲染 path（文件操作工具的目标），其余参数（intent/command/pattern 等）
- * 不渲染——需要时用 recall_pruned_tool_call 按锚点恢复。
+ * 非 path 类工具的主参数键（全量内联）。
+ *
+ * 这些工具的核心信息不在 path 类参数中，裁剪层（pruneToolCallArgs）
+ * 已全参数保留，渲染层在此映射中补充展示，使 summary 可读。
+ * 不在此表的工具仅渲染 path 类参数（如有）。
+ * intent（i）不在此映射中，不渲染。
  */
-function renderToolCallArgs(args: Record<string, unknown>): string {
+const PRIMARY_ARG_KEYS: Record<string, readonly string[]> = {
+  bash: ["command"],
+  grep: ["pattern"],
+  ask: ["questions"],
+  todo: ["op", "task", "phase"],
+};
+
+/** 提取 toolCall args 中的 path 类参数，空格连接。 */
+function renderPathArgs(args: Record<string, unknown>): string {
   const paths: string[] = [];
   for (const key of PATH_KEYS) {
     const v = args[key];
@@ -51,6 +63,38 @@ function renderToolCallArgs(args: Record<string, unknown>): string {
   return paths.join(" ");
 }
 
+/**
+ * 提取非 path 类工具的主参数，全量内联。
+ *
+ * string 值原样输出；非 string 值（如 ask 的 questions 数组）用紧凑 JSON
+ * 序列化。换行 -> 空格，避免破坏 summary 一行一 toolCall 结构。
+ */
+function renderPrimaryArg(
+  toolName: string,
+  args: Record<string, unknown>,
+): string {
+  const keys = PRIMARY_ARG_KEYS[toolName];
+  if (!keys) return "";
+  const parts: string[] = [];
+  for (const key of keys) {
+    const v = args[key];
+    if (v === undefined || v === null) continue;
+    const s = typeof v === "string" ? v : JSON.stringify(v);
+    if (s) parts.push(s.replace(/\r?\n/g, " ").trim());
+  }
+  return parts.join(" ");
+}
+
+/** 渲染 toolCall 行的参数部分：path 类参数 + 主参数，空格连接。 */
+function renderToolCallArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+): string {
+  return [renderPathArgs(args), renderPrimaryArg(toolName, args)]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** 渲染单个 PrunedEntry 为字符串（可能多行）。 */
 function renderEntry(entry: PrunedEntry): string {
   switch (entry.kind) {
@@ -58,10 +102,10 @@ function renderEntry(entry: PrunedEntry): string {
       return `<${entry.role}>\n${entry.text}\n</${entry.role}>`;
 
     case "toolCall": {
-      const pathStr = renderToolCallArgs(entry.args);
+      const argStr = renderToolCallArgs(entry.name, entry.args);
       const anchor = entry.anchor ? ` ${entry.anchor}` : "";
-      return pathStr
-        ? `- ${entry.name} ${pathStr}${anchor}`
+      return argStr
+        ? `- ${entry.name} ${argStr}${anchor}`
         : `- ${entry.name}${anchor}`;
     }
 

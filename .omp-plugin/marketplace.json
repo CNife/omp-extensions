@@ -15,7 +15,7 @@
       "name": "prune-context",
       "description": "确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩",
       "source": "./plugins/prune-context",
-      "version": "0.3.1"
+      "version": "0.3.2"
     },
     {
       "name": "skills-injection",
