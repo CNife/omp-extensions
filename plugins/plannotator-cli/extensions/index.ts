@@ -18,7 +18,7 @@
  *   （docs/research/plannotator-deadlock-v0.26.7.md）
  * - stdout JSON 完整即成功：不等 exited，残余挂起对用户体验零影响；
  *   json 模式解析决策 JSON 提取 feedback 字段投递，非 json 模式（/pnr）投递原始文本
- * - 超时兜底（默认 120s，PLANNOTATOR_FEEDBACK_TIMEOUT_MS 可覆盖）
+ * - 超时兜底（默认 30min，PLANNOTATOR_FEEDBACK_TIMEOUT_MS 可覆盖）
  * - PLANNOTATOR_AI=disabled 默认注入：避免 CLI 派生嵌套 `pi --mode rpc` 子进程
  *   （AI 模型发现探针）；用户显式设置 PLANNOTATOR_AI 时尊重用户值
  * - 反馈直接 pi.sendUserMessage(feedback)：不带 deliverAs（"followUp" 只入队不启动
@@ -79,6 +79,19 @@ function buildSpawnEnv(): Record<string, string> {
   return env;
 }
 
+/** 默认反馈超时：覆盖整个人工审阅期（标注/审阅常需数分钟）。
+ *  按人类活动时长尺度取值，而非投递耗时尺度（#38 实测正常投递 29-55s）——
+ *  过短会在用户尚未点 Send Feedback 时误杀进程、丢失反馈。 */
+const DEFAULT_FEEDBACK_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** 解析 PLANNOTATOR_FEEDBACK_TIMEOUT_MS：未设或非法值（非有限数 / ≤0）回退默认。 */
+export function resolveFeedbackTimeoutMs(): number {
+  const raw = process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS;
+  if (raw === undefined) return DEFAULT_FEEDBACK_TIMEOUT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_FEEDBACK_TIMEOUT_MS;
+}
+
 /** 从 stdout 提取反馈：json 模式解析取 feedback 字段，解析失败退化原始文本。 */
 function extractFeedback(stdoutText: string, json: boolean): string {
   const text = stdoutText.trim();
@@ -117,8 +130,7 @@ async function runPlannotator(
   args: string[],
   opts: RunOptions,
 ): Promise<void> {
-  const timeoutMs =
-    Number(process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS) || 120_000;
+  const timeoutMs = resolveFeedbackTimeoutMs();
 
   let proc: Bun.Subprocess;
   try {
