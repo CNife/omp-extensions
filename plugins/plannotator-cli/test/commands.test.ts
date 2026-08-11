@@ -22,7 +22,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import plannotatorCli, { type CommandCtx, type PiLike } from "../extensions/index.ts";
+import plannotatorCli, { resolveFeedbackTimeoutMs, type CommandCtx, type PiLike } from "../extensions/index.ts";
 
 // ── Bun.spawn 包装：合并当前 process.env 与插件显式 env ──────────────────
 const realSpawn = Bun.spawn.bind(Bun);
@@ -553,4 +553,47 @@ test("正常退出无反馈: closed (no feedback) info 通知", async () => {
 		"应发 closed 通知",
 	);
 	equal(pi.sent.length, 0, "无反馈不应投递");
+});
+
+// ── resolveFeedbackTimeoutMs: 默认值与 env 解析（回归保护：防 120s 默认值再现）──
+
+/** 临时设置环境变量，测试后恢复原值（含未设状态）。 */
+function withEnv(name: string, value: string | undefined, fn: () => void): void {
+	const saved = process.env[name];
+	try {
+		if (value === undefined) delete process.env[name];
+		else process.env[name] = value;
+		fn();
+	} finally {
+		if (saved !== undefined) process.env[name] = saved;
+		else delete process.env[name];
+	}
+}
+
+test("resolveFeedbackTimeoutMs: 未设 env 回退默认 30min", () => {
+	withEnv("PLANNOTATOR_FEEDBACK_TIMEOUT_MS", undefined, () => {
+		equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000);
+	});
+});
+
+test("resolveFeedbackTimeoutMs: 合法 env 值透传", () => {
+	withEnv("PLANNOTATOR_FEEDBACK_TIMEOUT_MS", "45000", () => {
+		equal(resolveFeedbackTimeoutMs(), 45000);
+	});
+});
+
+test("resolveFeedbackTimeoutMs: 非法 env（非数字 / 空白）回退默认", () => {
+	for (const bad of ["abc", "", "   "]) {
+		withEnv("PLANNOTATOR_FEEDBACK_TIMEOUT_MS", bad, () => {
+			equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, `非法值 ${JSON.stringify(bad)} 应回退默认`);
+		});
+	}
+});
+
+test("resolveFeedbackTimeoutMs: 0 / 负数 / NaN / Infinity 回退默认", () => {
+	for (const bad of ["0", "-5", "NaN", "Infinity"]) {
+		withEnv("PLANNOTATOR_FEEDBACK_TIMEOUT_MS", bad, () => {
+			equal(resolveFeedbackTimeoutMs(), 30 * 60 * 1000, `非法值 ${JSON.stringify(bad)} 应回退默认`);
+		});
+	}
 });

@@ -52,7 +52,7 @@ curl -fsSL https://plannotator.ai/install.sh | bash
    运行中；抑制后 0/89 次挂起。
 2. **stdout JSON 完整即成功**：`/pna` `/pnl` 读到完整决策 JSON 立即投递反馈并回收进程，不等
    `exited`，残余挂起对用户体验零影响。
-3. **超时兜底**：默认 120s（环境变量 `PLANNOTATOR_FEEDBACK_TIMEOUT_MS` 可覆盖），到点 kill
+3. **超时兜底**：默认 30min（环境变量 `PLANNOTATOR_FEEDBACK_TIMEOUT_MS` 可覆盖），到点 kill
    进程；若 stdout 已有内容仍投递，否则通知用户重试。
 4. **`PLANNOTATOR_AI=disabled` 默认注入**：避免 CLI 派生嵌套 `pi --mode rpc` 子进程（AI 模型
    发现探针）；用户显式设置 `PLANNOTATOR_AI` 时尊重用户值。
