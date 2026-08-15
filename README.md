@@ -29,6 +29,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 | [skills-injection](plugins/skills-injection/) | 交互式控制哪些技能被注入到系统提示词，持久化配置 |
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
 | [add-provider-models](plugins/add-provider-models/) | omp 加 provider+模型技能 + capture 验证扩展 |
+| [context-cap](plugins/context-cap/) | 进程内每个 Available model 的 Context window 封顶 256K |
 
 ## 添加新插件
 
