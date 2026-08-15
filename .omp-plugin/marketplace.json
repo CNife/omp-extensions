@@ -40,6 +40,12 @@
       "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
       "source": "./plugins/plannotator-cli",
       "version": "0.1.1"
+    },
+    {
+      "name": "context-cap",
+      "description": "进程内每个 Available model 的 Context window 封顶 256K",
+      "source": "./plugins/context-cap",
+      "version": "0.1.0"
     }
   ]
 }

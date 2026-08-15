@@ -1,0 +1,19 @@
+{
+  "name": "context-cap",
+  "version": "0.1.0",
+  "description": "进程内每个 Available model 的 Context window 封顶 256K",
+  "private": true,
+  "license": "MIT",
+  "author": "CNife <CNife@vip.qq.com>",
+  "homepage": "https://github.com/CNife/omp-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNife/omp-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CNife/omp-extensions/issues"
+  },
+  "omp": {
+    "extensions": ["./extensions/index.ts"]
+  }
+}
