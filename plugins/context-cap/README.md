@@ -1,17 +1,17 @@
 # context-cap
 
-进程内每个 Available model 的 Context window 封顶 256K。
+进程内每个 Available model 的 Context window 封顶 200K。
 
-安装即生效，没有通知，没有开关。压缩、溢出恢复、用量展示和模型选择器都读封顶后的值。用户不能用 `models.yml` 把窗口抬回 256K 以上。
+安装即生效，没有通知，没有开关。压缩、溢出恢复、用量展示和模型选择器都读封顶后的值。用户不能用 `models.yml` 把窗口抬回 200K 以上。
 
 ## 行为
 
-- 正数 Context window 写成 `min(原值, 256000)`；本来就 ≤256K 的保持原值
+- 正数 Context window 写成 `min(原值, 200000)`；本来就 ≤200K 的保持原值
 - `maxTokens` 非空时写成 `min(原 maxTokens, 封顶后窗口)`
-- `null` / 非正窗口整条不动，不会被填成 256K
+- `null` / 非正窗口整条不动，不会被填成 200K
 - 会话开始之后才出现的模型（发现刷新、登录、其他扩展 `registerProvider`）也会被盖住
 - 不改写磁盘上的 `models.yml`，不往 `/login` 塞假 provider
-- 256K 上限不能配置
+- 200K 上限不能配置
 
 卸载插件并新开进程后，模型恢复原生窗口。
 

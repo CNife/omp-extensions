@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * context-cap — 进程内每个 Available model 的 Context window 封顶 256K。
+ * context-cap — 进程内每个 Available model 的 Context window 封顶 200K。
  *
  * 安装即生效，静默，不可配置。session_start 时对注册表 getAll() 与当前
  * 会话模型原地施加 Context cap，并包装会重建目录的公开入口，盖住刷新、

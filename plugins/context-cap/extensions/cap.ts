@@ -1,11 +1,11 @@
 /**
  * 对 Model 形对象原地施加 Context cap。
  *
- * 正数 Context window 写成 min(原值, 256000)；
+ * 正数 Context window 写成 min(原值, 200000)；
  * 若 maxTokens 非空，写成 min(原 maxTokens, 封顶后窗口)。
  */
 
-export const CONTEXT_CAP = 256_000;
+export const CONTEXT_CAP = 200_000;
 
 export interface ModelLike {
 	contextWindow?: number | null;

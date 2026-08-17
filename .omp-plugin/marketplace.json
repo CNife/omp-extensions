@@ -43,9 +43,9 @@
     },
     {
       "name": "context-cap",
-      "description": "进程内每个 Available model 的 Context window 封顶 256K",
+      "description": "进程内每个 Available model 的 Context window 封顶 200K",
       "source": "./plugins/context-cap",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }
