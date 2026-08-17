@@ -8,24 +8,24 @@ import { deepStrictEqual, strictEqual } from "node:assert";
 import { test } from "node:test";
 import { applyContextCap } from "../extensions/cap.ts";
 
-test("大于 256K 的窗口被压到 256000", () => {
+test("大于 200K 的窗口被压到 200000", () => {
 	const model = { contextWindow: 1_000_000 };
 	applyContextCap([model]);
-	strictEqual(model.contextWindow, 256_000);
+	strictEqual(model.contextWindow, 200_000);
 });
 
-test("小于等于 256K 的窗口保持原值", () => {
+test("小于等于 200K 的窗口保持原值", () => {
 	const under = { contextWindow: 128_000 };
-	const exact = { contextWindow: 256_000 };
+	const exact = { contextWindow: 200_000 };
 	applyContextCap([under, exact]);
 	strictEqual(under.contextWindow, 128_000);
-	strictEqual(exact.contextWindow, 256_000);
+	strictEqual(exact.contextWindow, 200_000);
 });
 
 test("maxTokens 大于封顶后窗口时被压到窗口", () => {
 	const model = { contextWindow: 1_000_000, maxTokens: 512_000 };
 	applyContextCap([model]);
-	strictEqual(model.maxTokens, 256_000);
+	strictEqual(model.maxTokens, 200_000);
 });
 
 test("maxTokens 本来就更小的保持", () => {
@@ -57,16 +57,16 @@ test("同一批对象再施加一次，值不变", () => {
 	const model = { contextWindow: 1_000_000, maxTokens: 512_000 };
 	applyContextCap([model]);
 	applyContextCap([model]);
-	strictEqual(model.contextWindow, 256_000);
-	strictEqual(model.maxTokens, 256_000);
+	strictEqual(model.contextWindow, 200_000);
+	strictEqual(model.maxTokens, 200_000);
 });
 
-test("先把窗口改成 256K 以上再施加，仍 ≤256K", () => {
+test("先把窗口改成 200K 以上再施加，仍 ≤200K", () => {
 	const model = { contextWindow: 128_000, maxTokens: 8_192 };
 	applyContextCap([model]);
 	model.contextWindow = 1_000_000;
 	applyContextCap([model]);
-	strictEqual(model.contextWindow, 256_000);
+	strictEqual(model.contextWindow, 200_000);
 	strictEqual(model.maxTokens, 8_192);
 });
 
@@ -75,6 +75,6 @@ test("施加改的是传入对象本身，不是另一份克隆", () => {
 	const models = [model];
 	applyContextCap(models);
 	strictEqual(models[0], model);
-	strictEqual(model.contextWindow, 256_000);
-	strictEqual(model.maxTokens, 256_000);
+	strictEqual(model.contextWindow, 200_000);
+	strictEqual(model.maxTokens, 200_000);
 });
