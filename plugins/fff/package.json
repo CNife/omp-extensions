@@ -1,6 +1,6 @@
 {
   "name": "fff",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "FFF-powered fuzzy file and content search (fffind + ffgrep)",
   "private": true,
   "license": "MIT",

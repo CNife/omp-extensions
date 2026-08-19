@@ -51,7 +51,7 @@
       "name": "fff",
       "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
       "source": "./plugins/fff",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
