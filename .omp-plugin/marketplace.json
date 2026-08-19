@@ -46,6 +46,12 @@
       "description": "进程内每个 Available model 的 Context window 封顶 200K",
       "source": "./plugins/context-cap",
       "version": "0.2.0"
+    },
+    {
+      "name": "fff",
+      "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
+      "source": "./plugins/fff",
+      "version": "0.1.0"
     }
   ]
 }
