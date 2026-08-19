@@ -14,7 +14,7 @@
     "url": "https://github.com/CNife/omp-extensions/issues"
   },
   "omp": {
-    "extensions": ["./src/index.ts"]
+    "extensions": ["./extensions/index.ts"]
   },
   "dependencies": {
     "@ff-labs/fff-node": "*",

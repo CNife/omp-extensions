@@ -51,24 +51,38 @@ const HOME_SCAN_DISABLE_HINT =
   "You can prevent home dir indexing with FFF_ENABLE_HOME_SCAN=0, or enableHomeDirScanning in omp-fff.json.";
 
 // ---------------------------------------------------------------------------
-// Cursor store — simple bounded Map for pagination cursors
+// Cursor store — bounded cache shared by both tools
 // ---------------------------------------------------------------------------
 
-const cursorCache = new Map<string, GrepCursor>();
-let cursorCounter = 0;
+// Generic bounded cache for opaque pagination cursors. Both grep (GrepCursor)
+// and find (FindCursor) share the same eviction policy so it cannot drift.
+class BoundedCursorCache<T> {
+  private map = new Map<string, T>();
+  private counter = 0;
+  constructor(private prefix: string, private maxSize = 200) {}
+  store(value: T): string {
+    const id = `${this.prefix}${++this.counter}`;
+    this.map.set(id, value);
+    if (this.map.size > this.maxSize) {
+      const first = this.map.keys().next().value;
+      if (first !== undefined) this.map.delete(first);
+    }
+    return id;
+  }
+  get(id: string): T | undefined {
+    return this.map.get(id);
+  }
+}
+
+const grepCursorCache = new BoundedCursorCache<GrepCursor>("fff_c");
+const findCursorCache = new BoundedCursorCache<FindCursor>("");
 
 function storeCursor(cursor: GrepCursor): string {
-  const id = `fff_c${++cursorCounter}`;
-  cursorCache.set(id, cursor);
-  if (cursorCache.size > 200) {
-    const first = cursorCache.keys().next().value;
-    if (first) cursorCache.delete(first);
-  }
-  return id;
+  return grepCursorCache.store(cursor);
 }
 
 function getCursor(id: string): GrepCursor | undefined {
-  return cursorCache.get(id);
+  return grepCursorCache.get(id);
 }
 
 // Find pagination uses a page-index cursor: native `fileSearch` takes
@@ -82,17 +96,8 @@ interface FindCursor {
   auxRoot?: string;
 }
 
-const findCursorCache = new Map<string, FindCursor>();
-let findCursorCounter = 0;
-
 function storeFindCursor(cursor: FindCursor): string {
-  const id = `${++findCursorCounter}`;
-  findCursorCache.set(id, cursor);
-  if (findCursorCache.size > 200) {
-    const first = findCursorCache.keys().next().value;
-    if (first) findCursorCache.delete(first);
-  }
-  return id;
+  return findCursorCache.store(cursor);
 }
 
 function getFindCursor(id: string): FindCursor | undefined {
