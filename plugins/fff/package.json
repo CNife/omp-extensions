@@ -1,0 +1,28 @@
+{
+  "name": "fff",
+  "version": "0.1.0",
+  "description": "FFF-powered fuzzy file and content search (fffind + ffgrep)",
+  "private": true,
+  "license": "MIT",
+  "author": "CNife <CNife@vip.qq.com>",
+  "homepage": "https://github.com/CNife/omp-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CNife/omp-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CNife/omp-extensions/issues"
+  },
+  "omp": {
+    "extensions": ["./extensions/index.ts"]
+  },
+  "dependencies": {
+    "@ff-labs/fff-node": "*",
+    "@ff-labs/fff-bun": "*",
+    "@sinclair/typebox": "*"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}
