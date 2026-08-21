@@ -30,6 +30,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
 | [add-provider-models](plugins/add-provider-models/) | omp 加 provider+模型技能 + capture 验证扩展 |
 | [context-cap](plugins/context-cap/) | 进程内每个 Available model 的 Context window 封顶 200K |
+| [write-ttsr](plugins/write-ttsr/) | 动态意图对齐 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层） |
 
 ## 添加新插件
 

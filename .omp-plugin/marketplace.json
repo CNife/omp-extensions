@@ -52,6 +52,12 @@
       "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
       "source": "./plugins/fff",
       "version": "0.1.1"
+    },
+    {
+      "name": "write-ttsr",
+      "description": "动态意图对齐 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层）",
+      "source": "./plugins/write-ttsr",
+      "version": "0.1.1"
     }
   ]
 }
