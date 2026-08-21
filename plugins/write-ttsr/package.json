@@ -1,0 +1,10 @@
+{
+  "name": "write-ttsr",
+  "version": "0.1.0",
+  "description": "意图确认 + 多轮测试的 TTSR 规则编写技能（OMFG 增强层）",
+  "private": true,
+  "license": "MIT",
+  "omp": {
+    "skills": ["./skills"]
+  }
+}
