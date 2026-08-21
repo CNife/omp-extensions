@@ -1,84 +1,105 @@
 ---
 name: write-ttsr
 disable-model-invocation: true
-description: 编写/完善 TTSR 规则：意图确认 + 多轮多角度测试的完整流程。用户要求写规则、修规则、验证规则时手动调用。
+description: 动态对齐意图并用多角度测试收敛 TTSR 规则。
 ---
 
 # Write TTSR
 
-把"写一条 TTSR 规则"做成带意图确认与多轮测试的完整流程，补上 `/omfg` 的两块短板：不确认意图、不充分测试。
-
-## 定位
-
-- **本技能是 OMFG 的增强层**：用技能流程替代 `/omfg` 的生成（意图确认先行、测试驱动收敛），而非依赖 `/omfg`。
-- 规则文件写好后**下次会话生效**（本技能无法像 `/omfg` 那样实时注册进当前会话的 TtsrManager）——定稿时明确告知用户。
-- 深度语义（astCondition、生命周期、分桶细节）查 `omp://ttsr-injection-lifecycle.md` 与 `omp://rulebook-matching-pipeline.md`，本技能不复述。
+独立完成 TTSR 规则的意图对齐、编写与测试。
 
 ## 流程
 
-### 1. 确认意图（先于任何生成）
+### 1. 对齐意图
 
-用对话方式逐项确认，每项确认后再问下一项；用户跳过某项时采用默认值并记录：
+维护以下意图清单：
 
-1. **冒犯行为**——要防的具体行为模式（一句话可复述）。这是生成的核心输入。
-2. **场景**——发生在哪个流？工具流（哪个工具、什么文件类型，如 `tool:write(*.ts)`）还是文本/思考流？还是两者？**默认：具体工具 + 文件类型，不用裸 `tool` 或 `text`**。
-3. **中断性**——要阻止执行（`interruptMode: tool-only` / `always`）还是事后提醒（`never`）？**默认：`never`（警告不中断）**。注意：`never` 不阻止工具执行——要阻止必须显式选中断模式。
-4. **保存层级**——项目 `.omp/rules/` 还是全局 `~/.omp/agent/rules/`？**默认：项目**。
-5. **与现有规则关系**——是否已有同名规则（决定覆盖或改名）？是否与 `ttsr.disabledRules` / `ttsr.builtinRules` 冲突？**默认：无冲突，用新名字**。
+- **冒犯行为**：要捕获的一个具体行为模式。
+- **匹配场景**：`text`、`thinking`，或具体工具及文件 glob，如 `tool:write(*.ts)`。
+- **中断方式**：`always`、`prose-only`、`tool-only` 或 `never`。
+- **保存层级**：项目 `.omp/rules/` 或全局 `~/.omp/agent/rules/`。
+- **现有规则关系**：新建、覆盖或改名。
 
-确认完成后，向用户复述意图清单，确认后才进入第 2 步。
+先从用户原话填写已知项；用工具查事实；仅向用户询问仍未解决的决定。每轮一次问完当前已知前提下能回答的问题，得到答案后重新检查清单。
 
-### 2. 起草规则
-
-生成 frontmatter + 正文的 Markdown 文件，参照 `omfg-user.md` 的输出契约，但**补上契约没覆盖的三项**：
-
-- `scope`：第 1 步确认的具体工具 + 文件 glob（`tool:edit(*.ts)` 形态）。
-- `interruptMode`：第 1 步确认的取值（`always` / `prose-only` / `tool-only` / `never`）。**必写**——缺省时跟随全局 `ttsr.interruptMode`（默认 `always`），可能违背用户意图。
-- 正文：正面描述正确行为（"Use X"）而非只写禁止（"Don't do Y"），给出 Avoid/Use 示例。
-
-已知陷阱（写规则时自查，勿踩）：
-
-- `condition` 写成文件 glob（如 `*.rs`）会被自动改写成 `tool:edit(*.rs), tool:write(*.rs)` + 通配条件 `.*`——想要"匹配某文件类型的工具流"应显式写 `scope`。
-- frontmatter 里的 `name` 字段对规则**无效**——规则名取自文件名，文件名必须与规则名一致。
-- 规则文件无 frontmatter 也能加载，但 `description` 缺失会进不了规则书、`condition` 缺失则完全不是 TTSR 规则。
-- 正则要容忍工具参数流式传输的 JSON 转义（引号、反斜杠）。
-- 一个规则对应一个冒犯行为；不同行为拆多条规则。
-
-### 3. 多角度测试（核心环节）
-
-先确认规则可被加载，再按测试矩阵逐项验证：
+根据冒犯行为拟定 kebab-case 规则名，然后检查现有规则与禁用名单：
 
 ```bash
-# 确认注册（能看到 condition/scope 即注册成功）
-omp ttsr list
-# 单规则隔离测试（不依赖项目其他规则）
-omp ttsr test --rule <规则文件> --source tool --tool <工具> --path <示例路径> '<用例>'
-# 文件扫描（可选：仓库现有代码是否会被误触发）
-omp ttsr scan [目录]
+omp ttsr list --json
+omp config get ttsr.disabledRules --json
 ```
 
-**测试矩阵**（每条规则必须全部通过；任一失败进入第 4 步迭代）：
+仅在候选名已存在或被禁用时，请用户决定覆盖、改名或调整设置。用户明确跳过某项时采用并记录默认值：具体工具与文件 glob、`never`、项目层级、新名字。
 
-| 维度 | 构造原则 | 代表性命令 |
+**完成条件**：五项意图均已确定；候选规则名及完整清单已复述并经用户确认。
+
+### 2. 编写规则
+
+文件名是规则名；写入 `<保存目录>/<kebab-case-name>.md`，frontmatter 使用以下四个字段：
+
+```markdown
+---
+description: <一行摘要>
+condition: <JavaScript 正则字符串或字符串数组>
+scope: <匹配流字符串或字符串数组>
+interruptMode: <always|prose-only|tool-only|never>
+---
+
+<简洁说明正确行为，并给出必要的 Avoid/Use 示例>
+```
+
+- `condition` 精确匹配冒犯行为，并能处理实际工具参数中的 JSON 转义。
+- `scope` 使用第 1 步确认的最窄范围；文件类型约束只放在 `scope`。
+- 一个规则只处理一个冒犯行为；不同行为拆成不同规则。
+- 正文以正确行为为中心，说明替代做法。
+
+写入后读回文件，逐项核对路径、文件名、四个 frontmatter 字段与正文。
+
+**完成条件**：规则文件已写入确认的路径，读回内容符合上述契约和意图清单。
+
+### 3. 验证规则
+
+先确认项目实际注册的是刚写入的文件，且规范化后的 `condition` 与 `scope` 正确：
+
+```bash
+omp ttsr list --json
+```
+
+再用当前规则的真实 source、tool 和 path 运行隔离测试：
+
+```bash
+# 工具流
+omp ttsr test --json --rule <规则文件> --source tool --tool <工具> --path <示例路径> '<用例>'
+# 文本或思考流
+omp ttsr test --json --rule <规则文件> --source <text|thinking> '<用例>'
+```
+
+以 JSON 中的 `triggered` 判定结果：正例包含当前规则名才通过；负例为空才通过。每个维度选择一个最有代表性的用例，边界维度使用一对分界两侧的断言：
+
+| 维度 | 构造原则 | 期望 |
 | --- | --- | --- |
-| 正例-裸形态 | 冒犯行为的最简形态 | `omp ttsr test --rule <文件> --source tool --tool bash 'sleep 100'` |
-| 正例-真实形态 | 冒犯行为的运行时包装：**JSON 参数**（`{"command":"…"}`）、命令链（`a && sleep 100`）、`bash -c` 包装、转义引号 | `omp ttsr test --rule <文件> --source tool --tool bash '{"command":"sleep 100"}'` |
-| 负例-提到 | 文本里出现冒犯片段但不是执行（`grep "sleep 100"`、`echo 'sleep 2m'`） | `omp ttsr test --rule <文件> --source tool --tool bash 'grep "sleep 100" x.md'` |
-| 负例-邻近 | 相似但不越界：短值（`sleep 99`）、小数（`sleep 0.100`）、其他上下文 | `omp ttsr test --rule <文件> --source tool --tool bash 'sleep 30'` |
-| 边界 | 阈值两端（`99` vs `100`）、单位后缀（`2m`、`1h` 等价于长秒）、scope 外工具 | `omp ttsr test --rule <文件> --source tool --tool bash 'sleep 2m'` |
+| 正例-裸形态 | 冒犯行为的最简形态 | TRIGGER |
+| 正例-真实形态 | 当前流中风险最高的实际包装，如 JSON 参数、命令链或转义 | TRIGGER |
+| 负例-提到 | 提到冒犯片段但没有执行该行为 | NO_TRIGGER |
+| 负例-邻近 | 相似但允许的行为 | NO_TRIGGER |
+| 边界 | 一对相邻输入：允许侧与冒犯侧；也可使用 scope 内外作为分界 | NO_TRIGGER / TRIGGER |
 
-用例的"冒犯片段"替换为当前规则的实例；没有天然正例的规则（如纯文本规则）按上述维度用等价形态构造。
+记录每个用例的 source、tool、path、输入、期望与实际结果。需要检查仓库现有文件的误报时，补跑 `omp ttsr scan [目录]`。
+
+**完成条件**：静态读回与注册结果一致，矩阵中每个实际结果都等于期望。
 
 ### 4. 迭代收敛
 
-测试失败 → 诊断是 condition（漏报/误报）还是 scope（范围错）→ 修改规则文件 → 重跑第 3 步全矩阵。**上限 ≤3 轮**；超限**暂停**，向用户报告：当前矩阵结果、已尝试修改及效果、待排查问题，由用户决定继续或放弃。
+首次完整矩阵算第 1 轮。失败时判断问题来自 `condition`、`scope` 或测试上下文，修改规则后重跑完整矩阵；最多运行三轮。
+
+第 3 轮仍失败时暂停，报告当前矩阵、每轮修改及效果、剩余问题，交由用户决定继续或放弃。
+
+**完成条件**：完整矩阵通过，或第三轮失败报告已交付并暂停。
 
 ### 5. 定稿
 
-- 展示最终规则全文 + 保存路径 + 测试矩阵结果。
-- 明确告知：**下次会话生效**（当前会话不实时注册）。
-- 完成后可提示用户用 `/extensions` 查看规则、`/settings` 调 `ttsr.*` 全局参数。
+矩阵通过后展示最终规则全文、保存路径和矩阵结果，并明确告知用户：规则在下次会话生效，当前会话不会实时注册。可提示用 `/extensions` 查看规则、用 `/settings` 调整 `ttsr.*` 参数。
 
----
+**完成条件**：最终文件与测试证据已展示，生效时机已说明。
 
-**完成标准**：意图 5 项已确认并复述；规则文件已写入指定层级；测试矩阵全维度通过（或 ≤3 轮内收敛）；用户已被告知生效时机。
+深度语义（astCondition、生命周期、分桶与优先级）按需查 `omp://ttsr-injection-lifecycle.md` 和 `omp://rulebook-matching-pipeline.md`。

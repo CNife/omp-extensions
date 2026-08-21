@@ -55,9 +55,9 @@
     },
     {
       "name": "write-ttsr",
-      "description": "意图确认 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层）",
+      "description": "动态意图对齐 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层）",
       "source": "./plugins/write-ttsr",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
