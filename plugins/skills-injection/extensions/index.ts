@@ -4,7 +4,7 @@
  *
  * 交互式控制哪些技能被注入到 omp 的系统提示词（<skills> 段），持久化配置。
  *
- * - /skills-injection 命令：SettingsList 切换 enabled/disabled，即时持久化
+ * - /inject-skills 命令：SettingsList 切换 enabled/disabled，即时持久化
  * - before_agent_start：按配置过滤系统提示词 <skills> 段中被排除的技能
  * - session_start：英文通知本会话 injected / forbidden / non-injectable 技能
  *
@@ -134,13 +134,13 @@ export default function (pi: any) {
 		return { systemPrompt: next };
 	});
 
-	// /skills-injection 命令：SettingsList 多开关（对齐 /tools、/settings）
-	pi.registerCommand("skills-injection", {
+	// /inject-skills 命令：SettingsList 多开关（对齐 /tools、/settings）
+	pi.registerCommand("inject-skills", {
 		description: "Configure which skills inject into the system prompt",
 		handler: async (_args: string, ctx: any) => {
 			if (!ctx.hasUI) {
 				ctx.ui.notify(
-					"skills-injection requires an interactive TUI",
+					"inject-skills requires an interactive TUI",
 					"warning",
 				);
 				return;

@@ -1,6 +1,6 @@
 {
   "name": "skills-injection",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "交互式控制哪些技能被注入到 omp 的系统提示词，持久化配置",
   "private": true,
   "license": "MIT",
