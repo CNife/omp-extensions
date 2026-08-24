@@ -23,7 +23,7 @@ const NOISE_FLOOR_TOKENS = 1024;
 const NOTICE_MIN_TOKENS = 20_000;
 const NOTICE_MIN_COST = 0.1;
 
-interface CacheMiss {
+export interface CacheMiss {
   missedTokens: number;
   missedCost: number;
   idleMs: number;
@@ -34,6 +34,14 @@ interface PreviousRequest {
   promptTokens: number;
   modelKey: string;
   timestamp: number;
+  /**
+   * Sticky, but only within the same modelKey: some earlier request on this
+   * model reported cache activity. Distinguishes a total miss on a
+   * cache-read-only provider from a model that never reports caching at all.
+   * Unlike pi (which sticks across the whole scan), the flag does NOT survive
+   * a model switch: a model that never reports cache usage would otherwise be
+   * misreported as a full miss on every turn after the switch.
+   */
   reportedCache: boolean;
 }
 
@@ -105,11 +113,16 @@ function asPreviousRequest(
  * the just-completed message.
  *
  * Unlike pi (where message_end fires before persistence), omp persists the
- * message BEFORE emitting to extensions — so `entries` already contains
+ * message BEFORE emitting to extensions - so `entries` already contains
  * `msg`. We skip it by reference to avoid comparing the message against
  * itself.
+ *
+ * `reportedCache` is inherited only along a same-model chain: crossing a
+ * model boundary restarts it, so switching to a model that never reports
+ * cache usage counts at most the first post-switch turn (the model switch
+ * itself) instead of misreporting every turn as a full miss.
  */
-function detectCacheMiss(
+export function detectCacheMiss(
   entries: readonly { type: string; message?: unknown }[],
   msg: AssistantLike,
   cacheReadPricePerMillion: number,
@@ -126,7 +139,9 @@ function detectCacheMiss(
     if (!m || m.role !== "assistant" || !m.usage) continue;
     // Skip the current message (already persisted by omp before emit).
     if (m === msg) continue;
-    prev = asPreviousRequest(m as AssistantLike, prev?.reportedCache ?? false) ?? prev;
+    const modelKey = `${m.provider}/${m.model}`;
+    const inheritCache = prev?.modelKey === modelKey ? prev.reportedCache : false;
+    prev = asPreviousRequest(m as AssistantLike, inheritCache) ?? prev;
   }
 
   return detectMiss(prev, msg, cacheReadPricePerMillion);
@@ -142,7 +157,7 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function formatNotice(miss: CacheMiss): string {
+export function formatNotice(miss: CacheMiss): string {
   const cost = miss.missedCost >= 0.01 ? ` (~$${miss.missedCost.toFixed(2)})` : "";
   const reBilled = `${formatTokens(miss.missedTokens)} tokens re-billed${cost}`;
   let label = "Cache miss";
