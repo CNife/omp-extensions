@@ -27,7 +27,7 @@ omp plugin link ./plugins/skills-injection
 
 ## 使用
 
-输入 `/skills-injection` 打开设置列表（与 `/settings`、`/tools` 同款交互）：
+输入 `/inject-skills` 打开设置列表（与 `/settings`、`/tools` 同款交互）：
 
 - `↑↓` 导航
 - 输入字符模糊筛选技能名
@@ -51,7 +51,7 @@ non-injectable (K): z
 ```
 
 - `injected`：会注入系统提示词
-- `forbidden`：用户在 `/skills-injection` 里 disabled 的
+- `forbidden`：用户在 `/inject-skills` 里 disabled 的
 - `non-injectable`：`disable-model-invocation`（omp 归一化为 `hide`），本身不进系统提示词（TUI 列表不展示）
 
 ## 配置
@@ -72,7 +72,7 @@ non-injectable (K): z
 
 1. **`before_agent_start` 拦截**：读取配置，从 `event.systemPrompt`（omp 为 `string[]`）中匹配 `<skills>` 块，删除被排除技能对应的 `- name: description` 行。每 turn 读配置文件，所以下一条消息即生效。无需 `formatSkillsForPrompt`：omp 的技能段已是纯文本列表，按名删除即可。
 
-2. **`/skills-injection` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，`enableSearch` 做名称模糊筛选。切换即时写配置。技能列表与启动通知同源（见下）。
+2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，`enableSearch` 做名称模糊筛选。切换即时写配置。技能列表与启动通知同源（见下）。
 
 3. **`session_start` 通知**（与命令共用 `resolveSkills`）：
    - 技能名单与 `hide` 标志直接取自 omp 导出的 `loadSkills({ cwd })`（omp 已从 frontmatter 归一化 `disable-model-invocation` -> `Skill.hide`，无需再读文件兜底）
@@ -90,7 +90,7 @@ non-injectable (K): z
 
 ### 生效时机
 
-`before_agent_start` 在每次用户发消息时触发，每次重新读配置文件。所以 `/skills-injection` 保存后，**下一条消息**就按新配置注入。重启 omp 后同样读配置文件生效。
+`before_agent_start` 在每次用户发消息时触发，每次重新读配置文件。所以 `/inject-skills` 保存后，**下一条消息**就按新配置注入。重启 omp 后同样读配置文件生效。
 
 ## 测试
 
@@ -102,7 +102,7 @@ cd plugins/skills-injection && bun test  # 或 node --test --experimental-strip-
 
 ## 已知问题
 
-skills-injection 插件的 `/skills-injection` 命令有两个视觉 bug，根因在 omp 框架而非插件本身，插件层无法干净修复：
+skills-injection 插件的 `/inject-skills` 命令有两个视觉 bug，根因在 omp 框架而非插件本身，插件层无法干净修复：
 
 1. **幻影 user message**：命令文本被渲染进对话、却从未发给模型（session JSONL 无对应记录），关闭 TUI 后仍残留。
 2. **Working 闪烁**：自定义 TUI 显示期间，顶部状态行挂着 `⠏ Working…`，而非等待输入。

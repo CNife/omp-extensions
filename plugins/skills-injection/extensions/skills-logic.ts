@@ -149,7 +149,7 @@ export function formatStartupSummary(summary: SkillsSummary): string {
 	].join("\n");
 }
 
-// ──── /skills-injection 命令排序 ────────────────────────────────
+// ──── /inject-skills 命令排序 ───────────────────────────────────
 
 export interface SkillItem {
 	name: string;
