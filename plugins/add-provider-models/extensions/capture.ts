@@ -9,7 +9,7 @@
  * 移植自 pi 技能 scripts/capture.ts，改动：
  *   - 删 before_provider_headers handler（omp 无此事件）
  *   - before_provider_request 改为自己开槽（不再依赖 headers 先开槽）
- *   - 去 ExtensionAPI import，改 // @ts-nocheck + 接口（对齐 nmem-sync 范式）
+ *   - 去 ExtensionAPI import，改 // @ts-nocheck + 接口（对齐 nmem 范式）
  *   - PI_CAPTURE_LOG -> OMP_CAPTURE_LOG
  *   - slot/request 块删 headers 字段（omp 无 headers 事件，四维度 jq 不依赖）
  *

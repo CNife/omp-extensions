@@ -8,7 +8,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 
 ```bash
 /marketplace add CNife/omp-extensions
-/marketplace install nmem-sync@omp-extensions
+/marketplace install nmem@omp-extensions
 ```
 
 ### 本地开发
@@ -24,7 +24,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 
 | 插件 | 说明 |
 | --- | --- |
-| [nmem-sync](plugins/nmem-sync/) | nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件 |
+| [nmem](plugins/nmem/) | nmem 会话自动同步 + opt-in 引导注入，取代官方 nowledge-mem-omp 插件 |
 | [prune-context](plugins/prune-context/) | 确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩 |
 | [skills-injection](plugins/skills-injection/) | 交互式控制哪些技能被注入到系统提示词，持久化配置 |
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
