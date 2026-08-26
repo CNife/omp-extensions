@@ -74,7 +74,7 @@ description: 往 omp 的 models.yml 新增/适配 provider 模型，含取参、
 
 **验证阶段（步骤 6–9）：测试-抓取-循环-固定**--写入配置后立即验证，用 plugin 内置 `capture.ts` 扩展抓取 omp 实际发送的请求和响应，通过 ≤3 轮测试-改进循环收敛到正确配置，最终固定。
 
-**前提**：步骤 5 已写入 `~/.omp/agent/models.yml` 且 `omp models` 无配置错误；`capture.ts` 位于 plugin `extensions/capture.ts`（pi `scripts/capture.ts` 移植版：删 `before_provider_headers` handler + 去类型，对齐 nmem-sync `// @ts-nocheck` 范式）。
+**前提**：步骤 5 已写入 `~/.omp/agent/models.yml` 且 `omp models` 无配置错误；`capture.ts` 位于 plugin `extensions/capture.ts`（pi `scripts/capture.ts` 移植版：删 `before_provider_headers` handler + 去类型，对齐 nmem `// @ts-nocheck` 范式）。
 
 ### 6. 运行 agentic 测试
 
@@ -85,7 +85,7 @@ description: 往 omp 的 models.yml 新增/适配 provider 模型，含取参、
 VERIFY_CWD=$(mktemp -d /tmp/omp-verify-XXXX)
 mkdir -p "$VERIFY_CWD/.omp"
 cat > "$VERIFY_CWD/.omp/settings.json" <<'EOF'
-{ "disabledExtensions": ["extension-module:nmem-sync"] }
+{ "disabledExtensions": ["extension-module:nmem"] }
 EOF
 cd "$VERIFY_CWD"
 OMP_CAPTURE_LOG=/tmp/omp-verify-<provider>.jsonl \
@@ -94,10 +94,10 @@ OMP_CAPTURE_LOG=/tmp/omp-verify-<provider>.jsonl \
   '用 bash 工具列出 /tmp 目录下的前 5 个文件名，然后告诉我一共多少个'
 ```
 
-- **为什么最小化**：其他扩展（如 nmem-sync）的 handler 在 `--print` 时仍执行并可能超时（实测 nmem-sync handler 超时 2000ms 污染 stderr）；skills 注入 system prompt 改变模型行为。最小化让 capture 数据干净可复现。
+- **为什么最小化**：其他扩展（如 nmem）的 handler 在 `--print` 时仍执行并可能超时（实测 nmem handler 超时 2000ms 污染 stderr）；skills 注入 system prompt 改变模型行为。最小化让 capture 数据干净可复现。
 - **为什么不用 `--no-extensions`**：实测（omp 17.2.1）`--no-extensions` 会清除 CLI 的 `-e` 路径（help 称 "explicit -e paths still work" 有误），capture.ts 不加载。改用项目级 `.omp/settings.json` 的 `disabledExtensions` 精确禁用干扰扩展、保留 `-e`。
 - **为什么不用临时 agent dir（`PI_CODING_AGENT_DIR`）**：实测复制 `models.yml`+`config.yml` 到临时 dir 仍 401--apiKey 不随这两个文件复制（存于 agent dir 专属存储），隔离 agent dir 会丢 key。故保留主 agent dir，用项目级 `disabledExtensions` 精确禁干扰扩展。
-- **干扰扩展名**：`extension-module:<basename>`，basename = 扩展入口文件去 `.ts`（`nmem-sync.ts` -> `nmem-sync`）。装了其他会干扰的扩展按此规则加入。
+- **干扰扩展名**：`extension-module:<basename>`，basename = 扩展入口文件去 `.ts`（`nmem.ts` -> `nmem`）。装了其他会干扰的扩展按此规则加入。
 - `<plugin-dir>` 替换为 plugin 实际路径（`omp plugin link` 后用 `fd add-provider-models` 定位）。
 - 用 `--print`（非交互），事件自动触发；临时 cwd 留 `/tmp` 自动清理。
 - 日志写 `OMP_CAPTURE_LOG`（默认 `/tmp/omp-capture.jsonl`），JSONL（一行一个聚合 CALL 块）。

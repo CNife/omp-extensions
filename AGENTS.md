@@ -9,7 +9,7 @@ omp-extensions/
   .omp-plugin/
     marketplace.json          # 插件目录清单
   plugins/
-    nmem-sync/                # 每个插件一个自包含子目录
+    nmem/                    # 每个插件一个自包含子目录
       package.json            # omp.extensions + omp.skills 声明
       extensions/             # 扩展入口（.ts 文件）
       skills/                 # 技能（<name>/SKILL.md）

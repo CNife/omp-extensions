@@ -6,10 +6,10 @@
   },
   "plugins": [
     {
-      "name": "nmem-sync",
-      "description": "nmem 会话自动同步 + 引导注入，取代官方 nowledge-mem-omp 插件",
-      "source": "./plugins/nmem-sync",
-      "version": "0.1.0"
+      "name": "nmem",
+      "description": "nmem 会话自动同步 + opt-in 引导注入，取代官方 nowledge-mem-omp 插件",
+      "source": "./plugins/nmem",
+      "version": "0.2.0"
     },
     {
       "name": "prune-context",

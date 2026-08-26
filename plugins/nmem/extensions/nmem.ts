@@ -1,13 +1,11 @@
 // @ts-nocheck
 /**
- * nmem-sync — OMP extension for ambient nmem thread sync + guidance injection.
+ * nmem — OMP extension for ambient nmem thread sync + opt-in guidance.
  *
- * Replaces the official nowledge-mem-omp plugin.  v1 scope:
+ * Replaces the official nowledge-mem-omp plugin.  Scope:
  *   1. Ambient sync  — auto-sync OMP sessions as nmem threads (REST, no CLI)
- *   2. Guidance       — inject a Nowledge Mem capability overview into systemPrompt
- *
- * NOT in v1: Context Bundle auto-injection (agent self-serves via read-working-memory
- * skill), custom tools, plugin config file.
+ *   2. Guidance       — opt-in: no startupGuidance injection by default;
+ *      users self-serve via `nmem context` / `nmem wm read` and the nmem-guide skill
  *
  * Ported from @cnife/pi-nmem (packages/nmem/ambient.ts + client.ts).
  * Backend config: ~/.nowledge-mem/config.json + NMEM_API_URL / NMEM_API_KEY env vars.
@@ -218,7 +216,7 @@ async function nmemRequest<T = unknown>(
 
 const MAX_MESSAGE_CHARS = 20_000;
 const FLUSH_DELAY_MS = 750;
-const DEFAULT_PLUGIN_VERSION = "omp-nmem/0.1.0";
+const DEFAULT_PLUGIN_VERSION = "omp-nmem/0.2.0";
 
 // --- Source identity ---
 
@@ -588,20 +586,16 @@ function scheduleFlush(ctx: any, reason: string): void {
 }
 
 // ============================================================================
-// Guidance injection
+// Guidance injection (opt-in)
 // ============================================================================
 
 function startupGuidance(): string {
   return [
-    "## Nowledge Mem Guidance",
+    "## Nowledge Mem",
     "",
-    "Nowledge Mem is available through the installed skills and the `nmem` CLI. Use it when past context would make the work better. This extension automatically syncs your conversation as a thread; you need not save conversation history manually.",
-    "",
-    "- Search memory when the task resumes prior work, mentions an earlier decision, or would benefit from the user's established preferences and procedures.",
-    "- Search threads when the user asks about a previous conversation or when a memory points back to source conversation history.",
-    "- Save or update durable decisions, preferences, plans, procedures, learnings, events, or important context. Search first; keep one strong memory rather than several weak duplicates.",
-    "- Create an explicit handoff thread only when the user asks for a checkpoint. The extension already syncs completed conversation history automatically.",
-    "- Keep provenance as `source_app=omp`. Use `NMEM_AGENT_ID` only when this process is intentionally running as a named Nowledge AI Identity.",
+    "Nowledge Mem (`nmem` CLI) is available. This extension auto-syncs your conversation as a thread; you need not save conversation history manually.",
+    "The `nmem-guide` skill covers proactive search and autonomous save — reach it when past context would help.",
+    "Context Bundle / Working Memory are opt-in: run `nmem context` or `nmem wm read` when you need session-start context.",
     "",
   ].join("\n");
 }
@@ -610,10 +604,15 @@ function startupGuidance(): string {
 // Extension entry
 // ============================================================================
 
-export default function nmemSync(pi: any) {
-  pi.on("before_agent_start", async (event: any) => {
-    return { systemPrompt: `${event.systemPrompt}\n\n${startupGuidance()}` };
-  });
+export default function nmem(pi: any) {
+  // Guidance injection is opt-in: set NMEM_GUIDANCE=1 to enable.
+  // Default: no injection — users self-serve via `nmem context` / `nmem wm read`
+  // and the nmem-guide skill.
+  if (process.env.NMEM_GUIDANCE?.trim() === "1") {
+    pi.on("before_agent_start", async (event: any) => {
+      return { systemPrompt: `${event.systemPrompt}\n\n${startupGuidance()}` };
+    });
+  }
 
   pi.on("agent_end", async (_event: any, ctx: any) => {
     scheduleFlush(ctx, "agent_end");

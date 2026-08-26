@@ -20,7 +20,7 @@
  * then reads opts.isError + args.id (for the anchor) + content[0].text.
  *
  * omp 移植：原依赖 @toon-format/toon 的 encode 改为零依赖的 JSON 缩进实现，
- * 保持插件自包含（与本仓库 nmem-sync 等零依赖插件一致）。
+ * 保持插件自包含（与本仓库 nmem 等零依赖插件一致）。
  */
 
 import type { RecallDetails } from "./recall.ts";
