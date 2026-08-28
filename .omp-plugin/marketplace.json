@@ -33,7 +33,7 @@
       "name": "add-provider-models",
       "description": "omp 加 provider+模型技能 + capture 验证扩展",
       "source": "./plugins/add-provider-models",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "name": "plannotator-cli",
