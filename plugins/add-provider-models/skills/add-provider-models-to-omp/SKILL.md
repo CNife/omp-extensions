@@ -1,164 +1,156 @@
 ---
 name: add-provider-models-to-omp
 disable-model-invocation: true
-description: 往 omp 的 models.yml 新增/适配 provider 模型，含取参、thinking 合成、capture.ts 实测验证与固定。
+description: 为 OMP 的 provider 添加模型，并完成请求级验证。
 ---
 
 # Add Provider Models to Omp
 
-把"往 omp 的 `models.yml` 加模型"这件带判断的操作固化成可复用的执行规程。
+把“向 OMP 的 `models.yml` 添加模型”固化成一条可验收的流水线。
 
-**对应 provider（leading word）**：模型实际被托管/调用的 provider，以其 `baseUrl`/`api` 为准--不是模型的厂商。例：火山方舟（`ark.cn-beijing.volces.com`）托管了 MiniMax/Kimi，但 models.dev 里只有 `minimax.io`/`kimi.com` 厂商端点。参数必须取自**对应 provider**，否则 API 格式/窗口会错。
+**Provider-first**：按实际 `baseUrl` + `api` 识别托管 provider。模型厂商名不能替代托管端点；所有参数先取对应 provider，再翻译成 OMP 条目。
 
 ## 执行协议
 
-### 1. 确认 Input
+### 1. 确认输入
 
-- 目标 omp provider：`~/.omp/agent/models.yml` 中已存在的 provider key，或用户要新建并命名。
-- 模型清单：一个或多个模型，按 id/名称（如 `glm-5.2`、`kimi-k3`）。
-- **完成标准**：目标 provider 与模型清单已明确；provider 已存在或新建名已定。
+- 目标 OMP provider：`~/.omp/agent/models.yml` 中已有的 provider key，或用户明确的新 provider 名。
+- 模型清单：一个或多个模型，记录每个模型的准确 ID 和显示名。
+- **完成标准**：provider、模型 ID、写入范围均已明确。
 
-### 2. 源定位 -- 按对应 provider（托管端点）匹配
+### 2. 取参：按对应 provider 定位来源
 
-1. 读目标 omp provider 的 `baseUrl` + `api`。
-2. 用 models-dev-query 技能查 models.dev，找 `api`/`baseUrl` 与之相同的 provider：命中则取参；未命中（如方舟）则回退抓该**对应 provider**的官方 API 文档（web）。
-3. 注意：models.dev 的厂商端点（minimax.io）与托管端点（方舟）是不同 provider，模型名相同也不能混用参数。
+1. 读取目标 provider 的 `baseUrl` 和 `api`。
+2. 调用 `models-dev-query`，按 `api`/`baseUrl` 匹配托管端点；命中时以该 provider 的条目为起点。
+3. 未命中或出现冲突时，读取对应 provider 的官方 API/模型文档；模型厂商端点与托管端点的参数不混用。
+4. 记录每个模型的 ID、能力、上下文、最大输出、价格和来源链接。
 
-- **完成标准**：每个目标模型的参数源已确定（models.dev 命中 / 官方文档回退），并记下依据。
+- **完成标准**：每个模型都有已确定的参数来源；冲突已按对应 provider 官方文档解决。
 
-### 3. 适配 -- 翻译成 omp 的 model 条目
+### 3. 适配：生成 OMP model 条目
 
-按目标 provider 的 `api` 适配 `models.yml`。**字段目录与端点例外查 omp 内置文档，本技能不复述**：
+字段目录和端点例外按需读取：
 
-- 字段目录 -> `omp://models.md`「`models.yml` shape」+「Compatibility and routing fields」+「Anthropic compatibility」
-- 端点例外 -> `omp://provider-endpoint-constraints.md`
+- `omp://models.md` 的 `models.yml shape`、`Compatibility and routing fields`、`Anthropic compatibility`。
+- `omp://provider-endpoint-constraints.md`：仅当目标 `baseUrl`/`api` 命中端点例外时读取。
 
-本技能只记 omp 文档未作为"配置流程"写的三件事：
+条目规则：
 
-**① 该设什么**--`reasoning`（思考支持，来自取参）。思考模型需限定支持档位时设 `thinking.efforts`（ON 档列表，clamp 边界；缺省则 omp 按 `reasoning` 推断默认档）；非思考模型不设。effort 需重映射才设 `compat.reasoningEffortMap`（effort->字符串，压过 catalog 烘焙）。仅 `openai-completions` 设 `compat.thinkingFormat`（5 种，默认 `openai`）。其余 compat（`maxTokensField`/gateway routing/strict tools/cache…）仅当端点需要时按 `omp://models.md` 设。
+- `id`：填端点实际接受的模型 ID；`name`：显示名。
+- `reasoning`：跟随模型来源的思考能力。
+- `input`：只使用 OMP schema 接受的 `text`/`image`；源声明的其他模态先核对 OMP 能力。
+- `contextWindow`/`maxTokens`：以对应 provider 官方文档为准；与 models.dev 冲突时记录并采用官方值。
+- `cost`：按 OMP 规定的单位填 `input`/`output`/`cacheRead`/`cacheWrite`；源货币不同于 OMP 时，沿用现有 `models.yml` 的换算约定，并在 brief 记录汇率。
+- `compat`：只填端点实际需要的字段。
 
-**② thinking 合成**--`ThinkingLevel -> Effort|undefined（Off->undefined）-> clamp 到 thinking.efforts -> wire-map（compat.reasoningEffortMap ?? thinking.effortMap ?? identity）-> 按 thinkingFormat/api 发送`。`thinking.effortMap` 是 catalog 烘焙（自定义模型 identity），一般不手设。
+thinking 只保留这条合成路径：
 
-**③ off 不用配**--omp 无用户可配 off 值（与 pi 的 `thinkingLevelMap.off` 不同）。选 off 时 omp 按 `thinkingFormat` 自动发关闭信号（`zai`/`qwen`/`openrouter`）或省略（`openai`/anthropic）。只列 `thinking.efforts` 的 ON 档即可，off 交给 omp。
+`模型能力 → OMP 可用 ON 档 → clamp → thinkingFormat / api wire 参数`
 
-条目字段（详见 `omp://models.md`）：
+- 模型提供 OMP 可识别的命名 ON 档时，设置 `thinking.efforts`。
+- 模型只提供 bool 或 budget 时，按 OMP 适配层映射实际 wire 参数；provider API 字段不直接抄进 `models.yml`。
+- `openai-completions` 按需设置 `compat.thinkingFormat`；其他 API 按 `omp://models.md` 的发送形态适配。
+- ON 档之外的关闭行为交给 OMP 运行时处理。
 
-- `id`：用用户给的 id；与源确认是端点实际接受的模型名。
-- `name`：显示名。
-- `reasoning`：来自源（bool）。
-- `thinking.efforts`：见第 4 步。
-- `input`：omp schema 接受 `text`/`image`；源的 `video` 等不支持项丢弃。
-- `contextWindow` / `maxTokens`：以**对应 provider**官方文档为准；与 models.dev 冲突时取官方文档。
-- `cost`：源有按 token 计价填（`input`/`output`/`cacheRead`/`cacheWrite`）；订阅/套餐制（如 Coding Plan）省略（omp 默认 0）。
-- **完成标准**：每个模型已生成符合 omp models.yml schema 的条目，input 已去不支持项，context/maxTokens 取自对应 provider 官方文档。
+thinking 字段与 OMP schema 不一致、或来源只给 budget/bool 时，读取 [`references/thinking-adaptation.md`](references/thinking-adaptation.md)。
 
-### 4. thinking 合成（核心难点）
+- **完成标准**：每个模型都有 schema 合法的条目；来源、能力、上下文、最大输出、成本和 thinking 结论均可追溯。
 
-1. **Layer1 Provider 机制**：端点怎么收思考参数--按 `api`/`thinkingFormat` 查 `omp://models.md`「Compatibility and routing fields」的 thinking 节（`openai-completions` 5 种 `thinkingFormat` / `openai-responses` / `anthropic-messages` 各自的发送形态）。
-2. **Layer2 模型能力**：模型自身支持什么--来自源（`reasoning` 否？分级？哪些档？）。
-3. **Layer3 omp 处理**：omp 把 `ThinkingLevel` 翻译成实际请求参数的管线：`ThinkingLevel -> Effort|undefined（Off->undefined）-> clamp 到 thinking.efforts -> wire-map（compat.reasoningEffortMap ?? thinking.effortMap ?? identity）-> 按 thinkingFormat/api 发送`。
+### 4. brief 与确认
 
-- 合成：列模型实际支持的 ON 档进 `thinking.efforts`（如 `["low","medium","high"]`）；omp 按 `reasoning` 推断默认档，需限定才列。effort 值需重映射成端点接受字符串才设 `compat.reasoningEffortMap`（如 Fireworks GLM `minimal -> "none"`）。**off 不用配**--omp 无用户可配 off 值，选 off 时自动按 `thinkingFormat` 发关闭信号（`zai`/`qwen`/`openrouter`）或省略（`openai`/anthropic），与 pi 的 per-api `thinkingLevelMap.off` 语义根本不同。
-- **完成标准**：每个推理模型的 `thinking.efforts`（ON 档列表）已列出；`compat.reasoningEffortMap` 仅在需重映射时设；off 交给 omp（不配）；Layer1 已查 `omp://models.md`（不可凭记忆跳过）。
+写入前产出 brief，包含：
 
-### 5. Checkpoint
+- 将插入的完整模型条目或精确 diff。
+- 参数来源及链接。
+- thinking 机制、模型能力、最终 `efforts`、`reasoningEffortMap`、`thinkingFormat` 结论。
+- `contextWindow`/`maxTokens` 与 models.dev 的差异。
+- cost 的填入、换算或省略理由。
 
-跑完取参+适配，产出 **brief** 再让用户确认一次，确认后才写入：
+等待用户确认后再写入。
 
-- 将要插入的模型条目（diff/表格）。
-- 关键判断：参数源（models.dev 命中 / 官方文档回退）、thinking 结论（机制/能力/最终 `efforts`+`reasoningEffortMap`+`thinkingFormat`）、context/maxTokens 取值（与 models.dev 不同会标明）、cost 省略或填了。
-- 来源链接。
-- **完成标准**：brief 已呈现并经用户确认；`models.yml` 写入且 `omp models` 校验无配置错误。
+- **完成标准**：brief 已呈现且用户明确确认写入。
+
+### 5. 写入并校验
+
+1. 将条目写入 `~/.omp/agent/models.yml` 的目标 provider。
+2. 运行 `omp models <provider>`，确认无配置错误且新模型可见。
+
+- **完成标准**：配置被 OMP 接受，目标模型在 provider 清单中可见。
 
 ---
 
-**验证阶段（步骤 6–9）：测试-抓取-循环-固定**--写入配置后立即验证，用 plugin 内置 `capture.ts` 扩展抓取 omp 实际发送的请求和响应，通过 ≤3 轮测试-改进循环收敛到正确配置，最终固定。
+**验证阶段（步骤 6–9）**：写入后立即做一次实际 agentic 调用，用 plugin 内置 `capture.ts` 读取 OMP 的请求和响应；四个维度都必须有证据。
 
-**前提**：步骤 5 已写入 `~/.omp/agent/models.yml` 且 `omp models` 无配置错误；`capture.ts` 位于 plugin `extensions/capture.ts`（pi `scripts/capture.ts` 移植版：删 `before_provider_headers` handler + 去类型，对齐 nmem `// @ts-nocheck` 范式）。
+**前提**：步骤 5 已通过；`capture.ts` 位于 plugin 的 `extensions/capture.ts`。
 
-### 6. 运行 agentic 测试
+### 6. 运行隔离的 agentic 测试
 
-最小化 omp 运行环境，屏蔽其他插件/skills 干扰，只显式加载 capture.ts，执行一个 agentic 任务（多轮工具调用），一次覆盖四个调试维度：
+只关闭扩展发现，再显式加载调试用的 `capture.ts`；skills、rules 和 advisor 都通过 CLI 参数关闭：
 
 ```bash
-# 最小化：临时 cwd + 项目级 settings.json 禁干扰扩展 + --no-skills + 显式 capture
+set -euo pipefail
 VERIFY_CWD=$(mktemp -d /tmp/omp-verify-XXXX)
-mkdir -p "$VERIFY_CWD/.omp"
-cat > "$VERIFY_CWD/.omp/settings.json" <<'EOF'
-{ "disabledExtensions": ["extension-module:nmem"] }
+VERIFY_LOG=/tmp/omp-verify-<provider>.jsonl
+VERIFY_MODEL="<model>"
+VERIFY_CONFIG="$VERIFY_CWD/advisor-off.yml"
+
+cat > "$VERIFY_CONFIG" <<'EOF'
+advisor:
+  enabled: false
 EOF
+
 cd "$VERIFY_CWD"
-OMP_CAPTURE_LOG=/tmp/omp-verify-<provider>.jsonl \
-  omp --no-skills --extension <plugin-dir>/extensions/capture.ts \
+OMP_CAPTURE_LOG="$VERIFY_LOG" \
+  omp --no-extensions \
+  --extension <plugin-dir>/extensions/capture.ts \
+  --config "$VERIFY_CONFIG" \
+  --no-skills --no-rules \
   --print --model <provider>/<model> \
   '用 bash 工具列出 /tmp 目录下的前 5 个文件名，然后告诉我一共多少个'
+
+jq -e --arg model "$VERIFY_MODEL" \
+  'select(.role=="assistant" and .request.payload.model == $model)' \
+  "$VERIFY_LOG" >/dev/null
 ```
 
-- **为什么最小化**：其他扩展（如 nmem）的 handler 在 `--print` 时仍执行并可能超时（实测 nmem handler 超时 2000ms 污染 stderr）；skills 注入 system prompt 改变模型行为。最小化让 capture 数据干净可复现。
-- **为什么不用 `--no-extensions`**：实测（omp 17.2.1）`--no-extensions` 会清除 CLI 的 `-e` 路径（help 称 "explicit -e paths still work" 有误），capture.ts 不加载。改用项目级 `.omp/settings.json` 的 `disabledExtensions` 精确禁用干扰扩展、保留 `-e`。
-- **为什么不用临时 agent dir（`PI_CODING_AGENT_DIR`）**：实测复制 `models.yml`+`config.yml` 到临时 dir 仍 401--apiKey 不随这两个文件复制（存于 agent dir 专属存储），隔离 agent dir 会丢 key。故保留主 agent dir，用项目级 `disabledExtensions` 精确禁干扰扩展。
-- **干扰扩展名**：`extension-module:<basename>`，basename = 扩展入口文件去 `.ts`（`nmem.ts` -> `nmem`）。装了其他会干扰的扩展按此规则加入。
-- `<plugin-dir>` 替换为 plugin 实际路径（`omp plugin link` 后用 `fd add-provider-models` 定位）。
-- 用 `--print`（非交互），事件自动触发；临时 cwd 留 `/tmp` 自动清理。
-- 日志写 `OMP_CAPTURE_LOG`（默认 `/tmp/omp-capture.jsonl`），JSONL（一行一个聚合 CALL 块）。
-- **完成标准**：omp 正常完成请求、日志文件已生成非空。
+- `--no-extensions` 禁止其他扩展发现；`--extension` 只放行调试用的 capture。
+- `--config` 是 CLI overlay，关闭本次运行的 advisor；不修改项目级或全局配置。
+- jq 断言必须找到目标模型的 assistant request，证明 capture 实际加载而非仅生成空日志。
+- 多个模型逐一运行；每次覆盖自己的 `<provider>` 日志。
+- **完成标准**：实际请求正常结束，capture 日志非空且通过 jq 加载断言。
 
-### 7. 抓取调试
+测试隔离、CLI overlay 或 capture 未生效时，读取 [`references/verification.md`](references/verification.md)。
 
-读 JSONL，jq 按 CALL 块分析四维度（每行一个聚合块：assistant 含 `request.payload`/`responses`/`message`，user/toolResult 为精简块 `callIndex=null`）：
+### 7. 抓取并检查四个维度
 
-| 维度 | jq 证据（JSONL 字段） |
-|---|---|
-| **基础链路** | `.responses[].status`=200；`.message.stopReason` 非 error |
-| **思考参数** | `.request.payload` 含 `reasoning`/`thinking`/`reasoning_effort`/`enable_thinking`；`.message.content.thinkingBlocks>0` |
-| **tool 格式** | `.request.payload.tools` 非空；`.message.stopReason`=toolUse + `.message.content.toolCalls` 非空 |
-| **缓存** | assistant 块第 2+ 个 `.message.usage.cacheRead>0` |
+使用 `references/verification.md` 中的 jq 查询，逐模型检查：
 
-```bash
-L=/tmp/omp-verify-<provider>.jsonl
-# 基础链路
-jq -c 'select(.role=="assistant") | {callIndex, status: .responses[0].status, stopReason: .message.stopReason, errorMessage: .message.errorMessage}' "$L"
-# 思考参数（请求侧字段 + 响应侧 thinkingBlocks）
-jq -c 'select(.role=="assistant") | {callIndex, reasoning: .request.payload.reasoning, thinking: .request.payload.thinking, reasoningEffort: .request.payload.reasoning_effort, enableThinking: .request.payload.enable_thinking, thinkingBlocks: .message.content.thinkingBlocks}' "$L"
-# tool 格式
-jq -c 'select(.role=="assistant") | {callIndex, toolCount: (.request.payload.tools // [] | length), stopReason: .message.stopReason, toolCalls: .message.content.toolCalls}' "$L"
-# 缓存
-jq -c 'select(.role=="assistant") | {callIndex, cacheRead: .message.usage.cacheRead, cacheWrite: .message.usage.cacheWrite}' "$L"
-```
+1. **基础链路**：每个响应状态为 200，停止原因不是 error。
+2. **思考参数**：请求侧出现正确的 thinking wire 参数，响应侧出现预期 thinking blocks。
+3. **tool 格式**：请求带 tools，至少完成一次真实 tool call。
+4. **缓存**：至少产生第二次 assistant 请求，并检查真实的 cache usage。
 
-**注意事项**：
+四个维度全部检查；任何一维没有请求/响应证据，都不能进入固定阶段。
 
-- omp 无 `before_provider_headers` 事件（移植时已删该 handler）；payload 由 `before_provider_request` 直接捕获，四维度 jq 不依赖 headers。调试 API key 靠"跑通与否"判断。
-- `responseModel` 在 omp 恒为 `null`（四维度 jq 不用它，无害）。
-- user / toolResult 块 `callIndex=null`，分析时用 `select(.role=="assistant")` 过滤。
-- 日志不脱敏（含 payload 全文），调试结束删除。
-- **完成标准**：四维度均已检查，确认有无问题或明确问题所在。
+- **完成标准**：四个维度均已判定为通过，或明确记录失败维度并进入步骤 8。
 
 ### 8. 循环改进
 
-若步骤 7 发现配置问题，进入改进循环：
+若步骤 7 发现配置问题：
 
-1. **回退**：配置问题需恢复时，用步骤 5 的备份或 `git diff ~/.omp/agent/models.yml` 还原。
-2. **调整**：根据步骤 7 的发现修正 `models.yml`：
-   - `thinking.efforts` 档位错 -> 调整第 4 步得出的档位列表。
-   - effort 重映射错 -> 设/调 `compat.reasoningEffortMap`。
-   - `thinkingFormat` 不对 -> 设 `compat.thinkingFormat`（仅 completions）。
-   - 其他 compat 字段错 -> 按第 3 步重新适配（查 `omp://models.md`）。
-3. **重测**：重复步骤 6--用 `OMP_CAPTURE_LOG` 覆盖旧日志，确认问题已解决。
-4. **上限**：≤3 轮。超过 3 轮仍未通过，**暂停**并向用户报告：当前抓取发现、已尝试调整及效果、待排查问题、回滚（从备份或 git 恢复）。
+1. 只调整与证据对应的 `models.yml` 字段。
+2. 重复步骤 6–7；每轮重新生成并覆盖 capture 日志。
+3. 最多 3 轮；一轮 = 一次实际 OMP 调用加一次日志分析。
 
-一轮定义：一次 `omp --extension capture.ts --print` 运行 + 日志分析。同轮内多次运行（修复后重测）仍算同一轮。
+超过 3 轮仍未通过时，暂停并向用户报告：失败维度、实际请求证据、已尝试调整和当前结果。
 
-- **完成标准**：配置问题已解决 或 超限暂停向用户报告。
+- **完成标准**：四个维度通过，或已按上限暂停并完整报告。
 
-### 9. 固定
+### 9. 固定并清理
 
-配置验证通过后固定最终结果：
+1. 确认 `models.yml` 没有持久化 `capture.ts`；它只通过本次 CLI 参数加载。
+2. 再运行 `omp models <provider>`，确认配置无误、模型可见。
+3. 删除本轮 capture 日志和临时测试目录。
+4. 向用户报告模型清单、四维测试结果和可复用的 `capture.ts` 路径。
 
-1. **清除扩展**：调试完成后，确认 `models.yml` 未引用 `capture.ts`（capture 经 `--extension` 显式加载，不持久化到配置）；步骤 6 的临时 cwd（含 `.omp/settings.json`）留 `/tmp` 自动清理。
-2. **校验**：`omp models` 确认无配置错误。
-3. **确认**：`omp models 2>&1 | grep <provider>` 确认新模型可见。
-4. **清理**：`rm -f /tmp/omp-verify-<provider>.jsonl`。
-5. **简报**：告知用户：已添加的模型列表、已通过的测试维度、capture.ts 保留位置（后续排查可复用）。
-
-- **完成标准**：models.yml 有效、模型在 omp 中可见、日志已清理、用户已被告知结果。
+- **完成标准**：配置有效、模型可见、临时产物已清理、用户已收到最终结果。
