@@ -13,6 +13,7 @@ description: 用 omp browser 工具做网页数据提取、抓取、自动化操
 - **响应即数据**：API 响应里的字段就是最终数据，不需要再解析渲染后的 DOM。递归遍历 JSON 提取目标字段，一次拿到全部。
 - **渲染层是干扰源**：自动翻译、懒加载、分页 tab——都是渲染层行为，不是数据本身。network-first 天然绕过它们；被迫走 DOM 时才逐个处理。
 - **tab 语义**：站点常把内容分到独立 tab，每个 tab 对应不同 API 端点。切 tab 会触发新的网络请求，监听器继续捕获即可。
+- **能力分层**：tab helper 是常用封装，`page` 是完整 Puppeteer，`code` 是全 Node 编程，relay 是用户真实浏览器。helper 不够就降级，别硬凑。
 
 ## 规范
 
@@ -39,6 +40,22 @@ description: 用 omp browser 工具做网页数据提取、抓取、自动化操
 
 - 内容分到独立 tab 时，切 tab 触发对应 API 端点，监听器继续捕获。
 - 时间过滤：API 的 `created_at` 字段是权威时间戳，按它过滤窗口，不要用 DOM 里的相对时间。
+
+### 复杂操作：code 一次写完
+
+- 多步逻辑、循环、批量操作、数据处理在 `code` 里一次写完，不要拆成多轮 tab 调用。
+- `code` 有完整 Node 访问（不沙箱），可以 fetch、处理数据、批量操作。
+
+### 等待与验证
+
+- 等条件用 `wait(fn)` 轮询，不要固定 sleep。
+- 等 API 响应用 `waitForResponse`。
+- 状态验证用 `assert`，视觉验证用 `screenshot`。
+
+### 登录态：relay
+
+- 需要登录态/用户会话时用 relay 驱动用户真实浏览器，不要 headless 重新登录。
+- relay 里操作属于用户，注意边界。
 
 ### 验证
 
