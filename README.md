@@ -28,9 +28,10 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 | [prune-context](plugins/prune-context/) | 确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩 |
 | [skills-injection](plugins/skills-injection/) | 交互式控制哪些技能被注入到系统提示词，持久化配置 |
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
-| [add-provider-models](plugins/add-provider-models/) | omp 加 provider+模型技能 + capture 验证扩展 |
+| [playbooks](plugins/playbooks/) | playbook 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线 |
 | [context-cap](plugins/context-cap/) | 进程内每个 Available model 的 Context window 封顶 200K |
-| [write-ttsr](plugins/write-ttsr/) | 动态意图对齐 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层） |
+| [plannotator-cli](plugins/plannotator-cli/) | Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令 |
+| [fff](plugins/fff/) | FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff |
 
 ## 添加新插件
 

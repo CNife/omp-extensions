@@ -1,5 +1,5 @@
 ---
-name: add-provider-models-to-omp
+name: add-provider-models
 disable-model-invocation: true
 description: 为 OMP 的 provider 添加模型，并完成请求级验证。
 ---

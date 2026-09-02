@@ -6,6 +6,12 @@
   },
   "plugins": [
     {
+      "name": "playbooks",
+      "description": "playbook 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线",
+      "source": "./plugins/playbooks",
+      "version": "0.1.0"
+    },
+    {
       "name": "nmem",
       "description": "nmem 会话自动同步 + opt-in 引导注入，取代官方 nowledge-mem-omp 插件",
       "source": "./plugins/nmem",
@@ -30,12 +36,6 @@
       "version": "0.1.1"
     },
     {
-      "name": "add-provider-models",
-      "description": "omp 加 provider+模型技能 + capture 验证扩展",
-      "source": "./plugins/add-provider-models",
-      "version": "0.1.1"
-    },
-    {
       "name": "plannotator-cli",
       "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
       "source": "./plugins/plannotator-cli",
@@ -52,18 +52,6 @@
       "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
       "source": "./plugins/fff",
       "version": "0.1.1"
-    },
-    {
-      "name": "write-ttsr",
-      "description": "动态意图对齐 + 多轮多角度测试的 TTSR 规则编写技能（OMFG 增强层）",
-      "source": "./plugins/write-ttsr",
-      "version": "0.1.1"
-    },
-    {
-      "name": "omp-browser-guide",
-      "description": "omp browser 冷启动策略技能：network-first 提取、滚动/翻译/tab 处理",
-      "source": "./plugins/omp-browser-guide",
-      "version": "0.1.0"
     }
   ]
 }
