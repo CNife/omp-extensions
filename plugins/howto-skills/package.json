@@ -1,0 +1,10 @@
+{
+  "name": "howto-skills",
+  "version": "0.1.0",
+  "description": "how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线",
+  "private": true,
+  "license": "MIT",
+  "omp": {
+    "skills": ["./skills"]
+  }
+}

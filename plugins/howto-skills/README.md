@@ -1,6 +1,6 @@
-# playbooks
+# howto-skills
 
-playbook 技能合集：把跨场景复用的打法固化为技能，按需加载。
+how-to 技能合集：把跨场景复用的打法固化为技能，按需加载。
 
 ## 技能
 
