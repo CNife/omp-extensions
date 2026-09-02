@@ -1,9 +1,9 @@
 ---
-name: omp-browser-guide
+name: browser-guide
 description: 用 omp browser 工具做网页数据提取、抓取、自动化操作时加载
 ---
 
-# omp-browser-guide
+# browser-guide
 
 本技能把使用 omp browser 的通用方法前置：任务分类、成本意识、状态管理、能力分层。
 
