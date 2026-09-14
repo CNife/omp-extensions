@@ -8,11 +8,12 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
 import {
+	buildMenuItems,
 	DEFAULT_CONFIG,
 	filterSkillsSection,
+	formatSkillLabel,
 	formatStartupSummary,
 	parseConfig,
-	sortSkillItems,
 	summarizeSkills,
 	type SkillLike,
 } from "../extensions/skills-logic.ts";
@@ -165,21 +166,49 @@ test("formatStartupSummary: 多行英文 + 空类写 0", () => {
 });
 
 // ============================================================================
-// sortSkillItems
+// buildMenuItems / formatSkillLabel
 // ============================================================================
 
-test("sortSkillItems: 纯字母序", () => {
-	const items = [{ name: "b" }, { name: "a" }, { name: "c" }];
-	deepStrictEqual(sortSkillItems(items), [
-		{ name: "a" },
-		{ name: "b" },
-		{ name: "c" },
+test("buildMenuItems: 已加载非 hide ∪ 未加载的 excluded，按名字混排", () => {
+	const skills = [makeSkill("b"), makeSkill("d")];
+	const items = buildMenuItems(skills, new Set(["a", "c"]));
+	deepStrictEqual(items, [
+		{ name: "a", notInstalled: true },
+		{ name: "b", notInstalled: false },
+		{ name: "c", notInstalled: true },
+		{ name: "d", notInstalled: false },
 	]);
 });
 
-test("sortSkillItems: 不修改原数组", () => {
-	const items = [{ name: "b" }, { name: "a" }];
-	const sorted = sortSkillItems(items);
-	deepStrictEqual(items, [{ name: "b" }, { name: "a" }]);
-	deepStrictEqual(sorted, [{ name: "a" }, { name: "b" }]);
+test("buildMenuItems: hide 技能不进菜单", () => {
+	const items = buildMenuItems(
+		[makeSkill("a", { hide: true }), makeSkill("b")],
+		new Set(),
+	);
+	deepStrictEqual(items, [{ name: "b", notInstalled: false }]);
+});
+
+test("buildMenuItems: excluded 命中已加载技能 -> 不重复出 not-installed 行", () => {
+	deepStrictEqual(buildMenuItems([makeSkill("a")], new Set(["a"])), [
+		{ name: "a", notInstalled: false },
+	]);
+});
+
+test("buildMenuItems: excluded 命中已加载的 hide 技能 -> 不出现", () => {
+	deepStrictEqual(
+		buildMenuItems([makeSkill("a", { hide: true })], new Set(["a"])),
+		[],
+	);
+});
+
+test("buildMenuItems: 空输入 -> 空数组", () => {
+	deepStrictEqual(buildMenuItems([], new Set()), []);
+});
+
+test("formatSkillLabel: not-installed 加后缀", () => {
+	strictEqual(
+		formatSkillLabel({ name: "foo", notInstalled: true }),
+		"foo (not installed)",
+	);
+	strictEqual(formatSkillLabel({ name: "foo", notInstalled: false }), "foo");
 });

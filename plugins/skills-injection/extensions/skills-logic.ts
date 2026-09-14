@@ -149,15 +149,38 @@ export function formatStartupSummary(summary: SkillsSummary): string {
 	].join("\n");
 }
 
-// ──── /inject-skills 命令排序 ───────────────────────────────────
+// ──── /inject-skills 命令菜单行 ─────────────────────────────────
 
 export interface SkillItem {
 	name: string;
+	/** 配置里登记、但当前会话未加载的技能（label 加 "(not installed)" 后缀）。 */
+	notInstalled: boolean;
+}
+
+/** 菜单行 label：not-installed 行加后缀，其余用原名。 */
+export function formatSkillLabel(item: SkillItem): string {
+	return item.notInstalled ? `${item.name} (not installed)` : item.name;
 }
 
 /**
- * 按名字字母序排序。返回新数组，不修改原数组。
+ * 构建 /inject-skills 菜单行：已加载的非 hide 技能 ∪ 配置里登记但未加载的名字。
+ *
+ * - hide 技能不进菜单（omp 本就不注入，排除无意义）。
+ * - 名字命中已加载技能时以已加载行为准，不重复出 not-installed 行。
+ * - 两类按名字字母序混排。返回新数组。
  */
-export function sortSkillItems(items: SkillItem[]): SkillItem[] {
-	return [...items].sort((a, b) => a.name.localeCompare(b.name));
+export function buildMenuItems(
+	skills: readonly SkillLike[],
+	excluded: ReadonlySet<string>,
+): SkillItem[] {
+	const installed = new Set<string>();
+	const items: SkillItem[] = [];
+	for (const s of skills) {
+		installed.add(s.name);
+		if (!s.hide) items.push({ name: s.name, notInstalled: false });
+	}
+	for (const name of excluded) {
+		if (!installed.has(name)) items.push({ name, notInstalled: true });
+	}
+	return items.sort((a, b) => a.name.localeCompare(b.name));
 }
