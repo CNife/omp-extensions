@@ -25,3 +25,9 @@ _Avoid_: primer（primer 只讲概念、不含操作步骤，与实际内容不�
 **技能名**:
 `/skill:` 调用面的稳定标识，取简短的 kebab-case 主题名。
 _Avoid_: 带 `omp-` 前缀（marketplace 本身已限定 omp 生态）
+
+### 技能注入
+
+**not installed**:
+skills-injection 中技能相对当前会话的一种状态：配置里登记过该技能，但当前会话未加载它。区别于"已加载、但按配置不注入"（forbidden）。
+_Avoid_: not in context（与 forbidden 撞义——被排除的技能同样不在系统提示词里）

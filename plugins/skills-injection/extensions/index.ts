@@ -8,7 +8,7 @@
  * - before_agent_start：按配置过滤系统提示词 <skills> 段中被排除的技能
  * - session_start：英文通知本会话 injected / forbidden / non-injectable 技能
  *
- * 纯逻辑（parseConfig / filterSkillsSection / summarizeSkills / sortSkillItems）
+ * 纯逻辑（parseConfig / filterSkillsSection / summarizeSkills / buildMenuItems / formatSkillLabel）
  * 在 ./skills-logic.ts，独立可测。本文件只做编排（event hooks、命令、配置 IO）。
  *
  * 配置：~/.omp/agent/cnife-skills-injection.json，{ "excluded": ["name", ...] }
@@ -35,14 +35,14 @@ import {
 	Text,
 } from "@oh-my-pi/pi-tui";
 import {
+	buildMenuItems,
 	DEFAULT_CONFIG,
 	filterSkillsSection,
+	formatSkillLabel,
 	formatStartupSummary,
 	parseConfig,
-	type SkillItem,
 	type SkillLike,
 	type SkillsInjectionConfig,
-	sortSkillItems,
 	summarizeSkills,
 } from "./skills-logic.ts";
 
@@ -146,24 +146,20 @@ export default function (pi: any) {
 				return;
 			}
 
-			// 只列出会被注入的 skill（hide 的本就不注入，排除无意义）
+			// 菜单行：已加载的非 hide 技能 + 配置里登记但未加载的技能（not installed）
 			const allSkills = await resolveSkills(ctx.cwd);
-			const items: SkillItem[] = allSkills
-				.filter((s) => !s.hide)
-				.map((s) => ({ name: s.name }));
+			const excluded = new Set(loadConfig().excluded);
+			const sorted = buildMenuItems(allSkills, excluded);
 
-			if (items.length === 0) {
+			if (sorted.length === 0) {
 				ctx.ui.notify("No injectable skills available", "info");
 				return;
 			}
 
-			const excluded = new Set(loadConfig().excluded);
-			const sorted = sortSkillItems(items);
-
 			await ctx.ui.custom((tui: any, theme: any, _kb: any, done: any) => {
 				const settingItems: SettingItem[] = sorted.map((it) => ({
 					id: it.name,
-					label: it.name,
+					label: formatSkillLabel(it),
 					currentValue: excluded.has(it.name) ? "disabled" : "enabled",
 					values: ["enabled", "disabled"],
 				}));

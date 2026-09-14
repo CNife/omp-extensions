@@ -41,6 +41,8 @@ omp plugin link ./plugins/skills-injection
 
 列表按技能名字母序排列。切换后下一条消息即生效，无需重载。
 
+配置里登记过、但当前会话未加载的技能，也会以 `名字 (not installed)` 出现在列表里（与已装技能字母序混排），value 显示 `disabled`。把它切到 `enabled` 即从配置删除该登记项；该行保留到下次打开菜单才消失（用于清理卸载/改名后残留的配置项）。
+
 每次启动会话时，扩展会用英文 notify 列出三类技能（名字母序 + 数量；空类列表位写 `0`）：
 
 ```text
@@ -72,7 +74,7 @@ non-injectable (K): z
 
 1. **`before_agent_start` 拦截**：读取配置，从 `event.systemPrompt`（omp 为 `string[]`）中匹配 `<skills>` 块，删除被排除技能对应的 `- name: description` 行。每 turn 读配置文件，所以下一条消息即生效。无需 `formatSkillsForPrompt`：omp 的技能段已是纯文本列表，按名删除即可。
 
-2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，`enableSearch` 做名称模糊筛选。切换即时写配置。技能列表与启动通知同源（见下）。
+2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，`enableSearch` 做名称模糊筛选。切换即时写配置。行集 = 已加载非 hide 技能 ∪ 配置里登记但未加载的名字（`buildMenuItems`，字母序混排；后者 label 加 `(not installed)`）。
 
 3. **`session_start` 通知**（与命令共用 `resolveSkills`）：
    - 技能名单与 `hide` 标志直接取自 omp 导出的 `loadSkills({ cwd })`（omp 已从 frontmatter 归一化 `disable-model-invocation` -> `Skill.hide`，无需再读文件兜底）
@@ -86,6 +88,7 @@ non-injectable (K): z
 | 排除项未命中任何实际技能 | 不修改（避免无谓替换） |
 | 所有技能都被排除 | 整个技能段（说明行 + `<skills>` 块）从系统提示词移除 |
 | `disable-model-invocation` 技能 | omp 本就不注入 `<skills>`；命令列表中也不显示（排除它无意义） |
+| 配置里有但当前会话未加载 | 以 `名字 (not installed)` 列入菜单（字母序混排），可 toggle 清除该登记项 |
 | 无 `<skills>` 段（如无 `read` 工具） | 不修改，静默跳过 |
 
 ### 生效时机
@@ -94,7 +97,7 @@ non-injectable (K): z
 
 ## 测试
 
-纯逻辑（`parseConfig` / `filterSkillsSection` / `summarizeSkills` / `formatStartupSummary` / `sortSkillItems`）在 `test/skills-logic.test.ts`，零运行时 omp 依赖，独立可测：
+纯逻辑（`parseConfig` / `filterSkillsSection` / `summarizeSkills` / `formatStartupSummary` / `buildMenuItems` / `formatSkillLabel`）在 `test/skills-logic.test.ts`，零运行时 omp 依赖，独立可测：
 
 ```bash
 cd plugins/skills-injection && bun test  # 或 node --test --experimental-strip-types
