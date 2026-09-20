@@ -7,9 +7,9 @@
   "plugins": [
     {
       "name": "howto-skills",
-      "description": "how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线",
+      "description": "how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线、长任务托管与等待",
       "source": "./plugins/howto-skills",
-      "version": "0.1.0"
+      "version": "0.2.0"
     },
     {
       "name": "nmem",
