@@ -545,6 +545,49 @@ test("/pnl 摘要雷同: label 靠序号前缀保持唯一", async () => {
 	equal(new Set(labels).size, labels.length, "label 必须唯一（宿主只回传 label）");
 });
 
+test("/pnl 摘要: 词边界外的下划线是标识符不是强调，波浪号是路径不是删除线", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [
+		msg("assistant", "~/x 与 _两者_ 都在"),
+		msg("assistant", "改 api_key 与 max_retries__x"),
+		msg("assistant", "# `a_b` 与 *强调* 混排"),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	deepStrictEqual(
+		ui.selects[0].options.map((o) => o.label),
+		[
+			"倒数第 1 条 · a_b 与 强调 混排",
+			"倒数第 2 条 · 改 api_key 与 max_retries__x",
+			"倒数第 3 条 · ~/x 与 两者 都在",
+		],
+	);
+});
+
+test("/pnl 摘要截断按码点: emoji 不被切开成乱码", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	// 39 个 ASCII + emoji（代理对，UTF-16 下占 2 码元）+ 尾部：按码点截断到 40 时
+	// 必须整颗 emoji 保留，UTF-16 slice(0, 40) 会切出半个代理对。
+	const emojiLine = `${"x".repeat(39)}🎯尾部不该出现`;
+	const entries = [msg("assistant", "另一条"), msg("assistant", emojiLine)];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	const options = ui.selects[0].options;
+	equal(options[0].label, `倒数第 1 条 · ${"x".repeat(39)}🎯…`);
+	ok(!options[0].label.includes("�"), "不应出现截断产生的替代字符");
+	equal(options[0].description, "46 字符", "字符数按码点计（39 + emoji + 6）");
+});
+
 test("/pnl 列表只含非空助手消息（排除 user 与空 assistant）", async () => {
 	const { scratch } = setupScratch();
 	const ui = makeUi();

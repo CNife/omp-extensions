@@ -374,17 +374,22 @@ function collectAssistantTexts(ctx: CommandCtx, limit: number): string[] {
   return texts;
 }
 
-/** 剥离 markdown 噪声：标题符号、链接/图片语法、强调符、行内代码符。 */
+/** 剥离 markdown 噪声：标题符号、链接/图片语法、词边界上的 _强调_，以及 * 强调符与 ` 行内代码符。
+ *  下划线只在词边界成对出现时才算强调（`_x_`），否则会吃掉 `api_key` 这类标识符；
+ *  波浪号多为路径（`~/x`）而非删除线，故不剥离。 */
 function stripMarkdownNoise(line: string): string {
   return line
     .replace(/^#{1,6}\s*/, "")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[*_~`]+/g, "")
+    .replace(/(^|\s)_{1,2}([^_]+)_{1,2}(?=\s|$)/g, "$1$2")
+    .replace(/[*`]+/g, "")
     .trim();
 }
 
+/** 按码点截断（而非 UTF-16 码元：后者会把代理对，即 emoji，切成乱码）。 */
 function truncateSummary(line: string): string {
-  return line.length > SUMMARY_WIDTH ? `${line.slice(0, SUMMARY_WIDTH)}…` : line;
+  const chars = Array.from(line);
+  return chars.length > SUMMARY_WIDTH ? `${chars.slice(0, SUMMARY_WIDTH).join("")}…` : line;
 }
 
 /** 首行摘要：首个剥离噪声后非空的行的截断；整行都是噪声时退回首行原文。 */
@@ -401,11 +406,11 @@ function summarizeMessage(text: string): string {
 }
 
 /** 选择器选项：label 以「倒数第 N 条」序号前缀保证唯一（宿主回传值只有 label），
- *  description 给出该消息的体量（字符数）。 */
+ *  description 给出该消息的体量（按码点计的字符数）。 */
 function messageOption(text: string, ordinal: number): SelectOption {
   return {
     label: `倒数第 ${ordinal} 条 · ${summarizeMessage(text)}`,
-    description: `${text.length} 字符`,
+    description: `${Array.from(text).length} 字符`,
   };
 }
 
