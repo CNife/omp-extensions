@@ -44,4 +44,4 @@ pid 让脚本自己写（`echo $$ > /tmp/j.pid`）：`$!` 拿到的是 setsid �
 
 ## 连接
 
-omp 的 `ssh://` 自带主连接复用（`ControlMaster=auto` + `ControlPersist=3600`），反复读同一个远端日志不会反复握手；`bash` 里手写的 `ssh` 没有这层，要复用自己加 `-o ControlMaster=auto -o ControlPath=… -o ControlPersist=1h`。连接断开或 omp 退出会让**没 detach** 的远端子进程收到 SIGHUP——`hub start` 托管的 ssh 客户端只管本地那一侧。
+omp 的 `ssh://` 自带主连接复用（`ControlMaster=auto` + `ControlPersist=3600`），反复读同一个远端日志不会反复握手；`bash` 里手写的 `ssh` 没有这层，要复用自己加 `-o ControlMaster=auto -o ControlPath=… -o ControlPersist=1h`。`bash {name}` 托管的 ssh 客户端只管**本地**那一侧：本地侧由项目 broker 维持（默认 `session` 档活到 broker 空闲；`persist` 活过 omp，`detached` 活过 broker）。连接断开后，**远端**子进程的生死由远端会话决定——sshd 对断连发不发 SIGHUP 是远端的处置，本地不替它 detach，远端仍要 tmux 或 `setsid nohup` 自救。
