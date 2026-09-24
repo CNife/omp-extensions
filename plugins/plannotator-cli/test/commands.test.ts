@@ -3,7 +3,7 @@
  *
  * 用 stub CLI（test/fixtures/plannotator，环境契约见 stub 头注释）替换真实
  * plannotator 二进制，验证：
- *   /pnr 参数构造与通知、/pna 路径归一化与空参、/pnl annotate-last --stdin 内容、
+ *   /pnr 参数构造与通知、/pna 路径归一化与空参、/pnl 消息选择器与 annotate-last --stdin 内容、
  *   spawn 环境强制项（BROWSER=none PLANNOTATOR_BROWSER=none PLANNOTATOR_AI=disabled）、
  *   stdout 反馈 -> sendUserMessage 直接发送（无 deliverAs）、json 完整即投递（不等 exited）、
  *   超时兜底、无反馈 / CLI 报错通知。
@@ -64,6 +64,28 @@ function makePi(): TestPi {
 
 type Notice = { msg: string; type: "info" | "error" };
 
+/** 选择器调用记录与回传值控制（/pnl 消息选择器的接缝）。 */
+interface SelectCall {
+	title: string;
+	options: { label: string; description?: string }[];
+	dialogOptions: { initialIndex?: number } | undefined;
+}
+
+interface Ui {
+	hasUI: boolean;
+	selects: SelectCall[];
+	/** 回传被选中项的 label；默认选第一项（= 回车，即最新一条）。 */
+	pick: (call: SelectCall) => string | undefined;
+}
+
+function makeUi(hasUI = true): Ui {
+	return {
+		hasUI,
+		selects: [],
+		pick: (call) => call.options[0]?.label,
+	};
+}
+
 /** 取注册的命令，未注册即测试错误（Map.get 可空，此处为 fixture 内不变量）。 */
 function command(pi: TestPi, name: string) {
 	const cmd = pi.commands.get(name);
@@ -75,10 +97,19 @@ function makeCtx(
 	cwd: string,
 	entries: unknown[],
 	notified: Notice[],
+	ui: Ui = makeUi(),
 ): CommandCtx {
 	return {
 		cwd,
-		ui: { notify: (msg: string, type: "info" | "error") => notified.push({ msg, type }) },
+		hasUI: ui.hasUI,
+		ui: {
+			notify: (msg: string, type: "info" | "error") => notified.push({ msg, type }),
+			select: async (title, options, dialogOptions) => {
+				const call: SelectCall = { title, options, dialogOptions };
+				ui.selects.push(call);
+				return ui.pick(call);
+			},
+		},
 		sessionManager: { getBranch: () => entries },
 	};
 }
@@ -91,7 +122,11 @@ function makeCtxNoBranch(
 ): CommandCtx {
 	return {
 		cwd,
-		ui: { notify: (msg: string, type: "info" | "error") => notified.push({ msg, type }) },
+		hasUI: true,
+		ui: {
+			notify: (msg: string, type: "info" | "error") => notified.push({ msg, type }),
+			select: async () => undefined,
+		},
 		sessionManager: { getEntries: () => entries },
 	};
 }
@@ -174,7 +209,7 @@ test("注册: 恰好 pnr/pna/pnl 三个命令，description 与源码一致", ()
 	);
 	strictEqual(
 		command(pi, "pnl").description,
-		"Annotate the last assistant message in Plannotator",
+		"Annotate a recent assistant message in Plannotator",
 	);
 });
 
@@ -398,18 +433,281 @@ test("/pnl 无 getBranch 时走 getEntries 兜底", async () => {
 test("/pnl 无 assistant 消息: 错误通知且无副作用", async () => {
 	const { scratch, stubLog } = setupScratch();
 	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	const ui = makeUi();
 	const pi = makePi();
 	plannotatorCli(pi);
 	const notified: Notice[] = [];
 	const entries = [msg("user", "only user")];
-	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified));
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
 	await expectNothingHappens();
 
 	equal(existsSync(stubLog), false, "不应 spawn CLI");
 	equal(existsSync(stdinFile(scratch)), false, "不应产生 stdin 文件");
+	equal(ui.selects.length, 0, "零条可选消息不应弹选择器");
 	ok(
 		notified.some((n) => n.msg === "No assistant message found in session." && n.type === "error"),
 		"应发错误通知",
+	);
+});
+
+// ── /pnl 消息选择器（#82）────────────────────────────────────────────────
+
+test("/pnl 多条消息: 选项倒序 + label 摘要 + 字符数 + initialIndex 0", async () => {
+	const { scratch } = setupScratch();
+	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	const ui = makeUi();
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const entries = [
+		msg("user", "用户提问"),
+		msg("assistant", "# 设计说明\n第二行"),
+		msg("assistant", "短回复"),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	const call = ui.selects[0];
+	equal(call.title, "Select an assistant message to annotate");
+	deepStrictEqual(call.dialogOptions, { initialIndex: 0 });
+	deepStrictEqual(call.options, [
+		{ label: "倒数第 1 条 · 短回复", description: "3 字符" },
+		{ label: "倒数第 2 条 · 设计说明", description: "10 字符" },
+	]);
+
+	// 默认光标在最新一条：回车（pick 默认回传 options[0]）即旧行为
+	await waitFor(() => existsSync(stdinFile(scratch)));
+	equal(readFileSync(stdinFile(scratch), "utf8"), "短回复");
+	ok(
+		notified.some((n) => n.msg === "Opening annotation UI for last message..." && n.type === "info"),
+		"选最新一条时通知与旧行为逐字一致",
+	);
+});
+
+test("/pnl 最多 25 条: 只列最近的 25 条，更早的不出现", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined; // 只看选项，取消即可
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [
+		msg("assistant", "oldest"),
+		...Array.from({ length: 30 }, (_, i) => msg("assistant", `m${i + 1}`)),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	const options = ui.selects[0].options;
+	equal(options.length, 25);
+	equal(options[0].label, "倒数第 1 条 · m30");
+	equal(options[24].label, "倒数第 25 条 · m6");
+	ok(!options.some((o) => o.label.includes("oldest")), "第 26 条起不应出现在列表里");
+});
+
+test("/pnl 摘要: 剥离 markdown 噪声并截断到 40 字符", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [
+		msg("assistant", "普通"),
+		msg("assistant", "## **加粗标题** 与 `code`\n正文"),
+		msg("assistant", `# ${"长".repeat(60)}`),
+		msg("assistant", "x".repeat(41)),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	deepStrictEqual(
+		ui.selects[0].options.map((o) => o.label),
+		[
+			`倒数第 1 条 · ${"x".repeat(40)}…`,
+			`倒数第 2 条 · ${"长".repeat(40)}…`,
+			"倒数第 3 条 · 加粗标题 与 code",
+			"倒数第 4 条 · 普通",
+		],
+	);
+});
+
+test("/pnl 摘要雷同: label 靠序号前缀保持唯一", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [msg("assistant", "同样的文本"), msg("assistant", "同样的文本")];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	const labels = ui.selects[0].options.map((o) => o.label);
+	deepStrictEqual(labels, ["倒数第 1 条 · 同样的文本", "倒数第 2 条 · 同样的文本"]);
+	equal(new Set(labels).size, labels.length, "label 必须唯一（宿主只回传 label）");
+});
+
+test("/pnl 摘要: 词边界外的下划线是标识符不是强调，波浪号是路径不是删除线", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [
+		msg("assistant", "~/x 与 _两者_ 都在"),
+		msg("assistant", "改 api_key 与 max_retries__x"),
+		msg("assistant", "# `a_b` 与 *强调* 混排"),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	deepStrictEqual(
+		ui.selects[0].options.map((o) => o.label),
+		[
+			"倒数第 1 条 · a_b 与 强调 混排",
+			"倒数第 2 条 · 改 api_key 与 max_retries__x",
+			"倒数第 3 条 · ~/x 与 两者 都在",
+		],
+	);
+});
+
+test("/pnl 摘要截断按码点: emoji 不被切开成乱码", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	// 39 个 ASCII + emoji（代理对，UTF-16 下占 2 码元）+ 尾部：按码点截断到 40 时
+	// 必须整颗 emoji 保留，UTF-16 slice(0, 40) 会切出半个代理对。
+	const emojiLine = `${"x".repeat(39)}🎯尾部不该出现`;
+	const entries = [msg("assistant", "另一条"), msg("assistant", emojiLine)];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	const options = ui.selects[0].options;
+	equal(options[0].label, `倒数第 1 条 · ${"x".repeat(39)}🎯…`);
+	ok(!options[0].label.includes("�"), "不应出现截断产生的替代字符");
+	equal(options[0].description, "46 字符", "字符数按码点计（39 + emoji + 6）");
+});
+
+test("/pnl 列表只含非空助手消息（排除 user 与空 assistant）", async () => {
+	const { scratch } = setupScratch();
+	const ui = makeUi();
+	ui.pick = () => undefined;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const entries = [
+		msg("user", "用户输入"),
+		msg("assistant", "   \n  "),
+		msg("assistant", "第一个回复"),
+		msg("assistant", ""),
+		msg("user", "再问一句"),
+		msg("assistant", "第二个回复"),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	deepStrictEqual(
+		ui.selects[0].options.map((o) => o.label),
+		["倒数第 1 条 · 第二个回复", "倒数第 2 条 · 第一个回复"],
+	);
+});
+
+test("/pnl 选中倒数第 3 条: stdin 为该条文本 + 前缀带序号 + 通知带序号", async () => {
+	const { scratch, stubLog } = setupScratch();
+	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	process.env.PLANNO_STUB_STDOUT = '{"decision":"annotated","feedback":"改这里"}';
+	const ui = makeUi();
+	ui.pick = (call) => call.options[2]?.label;
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const entries = [
+		msg("assistant", "第一条（最旧）"),
+		msg("assistant", "第二条"),
+		msg("assistant", "第三条（最新）"),
+	];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
+
+	await waitFor(() => existsSync(stdinFile(scratch)));
+	equal(readFileSync(stdinFile(scratch), "utf8"), "第一条（最旧）");
+	assertStubLog(readFileSync(stubLog, "utf8"), "arg=annotate-last", "arg=--stdin", "arg=--json");
+	ok(
+		notified.some(
+			(n) => n.msg === "Opening annotation UI for assistant message 3 back..." && n.type === "info",
+		),
+		"非最新一条的通知应带序号",
+	);
+
+	// 反馈前缀：N > 1 时指明序号，仍带"无需查找文件"的说明
+	await waitFor(() => pi.sent.length > 0);
+	ok(
+		pi.sent[0].content.startsWith(
+			"这是对倒数第 3 条助手消息的标注反馈，请直接处理，无需查找文件。",
+		),
+		"应带带序号的 framing 前缀",
+	);
+	ok(pi.sent[0].content.endsWith("改这里"), "前缀后应跟反馈正文");
+});
+
+test("/pnl Esc 取消: 不 spawn、不投递、无通知", async () => {
+	const { scratch, stubLog } = setupScratch();
+	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	const ui = makeUi();
+	ui.pick = () => undefined; // Esc
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const entries = [msg("assistant", "旧"), msg("assistant", "新")];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
+
+	await waitFor(() => ui.selects.length === 1);
+	await expectNothingHappens();
+
+	equal(existsSync(stubLog), false, "不应 spawn CLI");
+	equal(existsSync(stdinFile(scratch)), false, "不应产生 stdin 文件");
+	equal(pi.sent.length, 0, "不应投递");
+	equal(notified.length, 0, "取消应静默");
+});
+
+test("/pnl 仅一条可选消息: 跳过选择器直接标注最后一条", async () => {
+	const { scratch } = setupScratch();
+	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	const ui = makeUi();
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const entries = [msg("user", "问"), msg("assistant", "唯一回复")];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
+
+	await waitFor(() => existsSync(stdinFile(scratch)));
+	equal(readFileSync(stdinFile(scratch), "utf8"), "唯一回复");
+	equal(ui.selects.length, 0, "只有一条可选消息时不应弹选择器");
+	ok(
+		notified.some((n) => n.msg === "Opening annotation UI for last message..." && n.type === "info"),
+		"应发与旧行为逐字一致的 info 通知",
+	);
+});
+
+test("/pnl 无 UI 的宿主（hasUI=false）: 报错且不 spawn、不弹选择器", async () => {
+	const { scratch, stubLog } = setupScratch();
+	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
+	const ui = makeUi(false);
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const entries = [msg("assistant", "旧"), msg("assistant", "新")];
+	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified, ui));
+	await expectNothingHappens();
+
+	equal(existsSync(stubLog), false, "不应 spawn CLI");
+	equal(ui.selects.length, 0, "无 UI 时不应调用 select");
+	equal(pi.sent.length, 0, "不应投递");
+	ok(
+		notified.some(
+			(n) =>
+				n.msg === "/pnl requires an interactive terminal (no UI available in this session)." &&
+				n.type === "error",
+		),
+		"应发无 UI 错误通知",
 	);
 });
 
