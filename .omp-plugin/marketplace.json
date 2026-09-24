@@ -18,12 +18,6 @@
       "version": "0.2.0"
     },
     {
-      "name": "prune-context",
-      "description": "确定性上下文裁剪：零 LLM 开销的 prune->format 管线替代 LLM 摘要压缩",
-      "source": "./plugins/prune-context",
-      "version": "0.3.2"
-    },
-    {
       "name": "skills-injection",
       "description": "交互式控制哪些技能被注入到系统提示词，持久化配置",
       "source": "./plugins/skills-injection",
@@ -39,18 +33,6 @@
       "name": "plannotator-cli",
       "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
       "source": "./plugins/plannotator-cli",
-      "version": "0.1.1"
-    },
-    {
-      "name": "context-cap",
-      "description": "进程内每个 Available model 的 Context window 封顶 200K",
-      "source": "./plugins/context-cap",
-      "version": "0.2.0"
-    },
-    {
-      "name": "fff",
-      "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
-      "source": "./plugins/fff",
       "version": "0.1.1"
     }
   ]
