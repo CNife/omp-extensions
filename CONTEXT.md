@@ -14,6 +14,10 @@ _Avoid_: 纯技能插件、skills-only plugin
 声明了 `omp.extensions` 的插件，扩展由 omp 在启动时自动注册。
 _Avoid_: 代码插件
 
+**退役**:
+插件的终态：从 marketplace 摘除注册并删除插件目录，代码只留在 git 历史与 ADR 里。
+_Avoid_: 下架（可能仍可安装）、废弃 / deprecated（可能仍在仓里）、删除（只说了动作，没说明注册面一起摘）
+
 **howto-skills 插件**:
 how-to 技能合集：面向一类任务的操作打法（心智模型 + 执行规范 + 排查）固化为技能。插件名以 `-skills` 结尾标明载体形态。
 _Avoid_: playbooks（只说体裁，看不出是技能合集）、primer（primer 只讲概念、不含操作步骤，与实际内容不符）

@@ -40,18 +40,6 @@
       "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
       "source": "./plugins/plannotator-cli",
       "version": "0.1.1"
-    },
-    {
-      "name": "context-cap",
-      "description": "进程内每个 Available model 的 Context window 封顶 200K",
-      "source": "./plugins/context-cap",
-      "version": "0.2.0"
-    },
-    {
-      "name": "fff",
-      "description": "FFF 驱动的模糊文件搜索（fffind）+ 内容搜索（ffgrep），fork 自 @ff-labs/pi-fff",
-      "source": "./plugins/fff",
-      "version": "0.1.1"
     }
   ]
 }
