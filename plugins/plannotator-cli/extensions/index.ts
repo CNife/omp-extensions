@@ -4,7 +4,7 @@
  * Three slash commands:
  *   /pnr [url]     - Browser-based code review for local git changes or a PR/MR URL
  *   /pna <target>  - Browser-based annotation for a markdown file, folder, or URL
- *   /pnl           - Annotate the last assistant message
+ *   /pnl           - Annotate a recent assistant message (interactive selector)
  *
  * Requires the `plannotator` binary on PATH (>= 0.25.1, https://plannotator.ai/install.sh).
  * No npm dependencies; all UI/infra is handled by the CLI process.
@@ -23,6 +23,11 @@
  *   （AI 模型发现探针）；用户显式设置 PLANNOTATOR_AI 时尊重用户值
  * - 反馈直接 pi.sendUserMessage(feedback)：不带 deliverAs（"followUp" 只入队不启动
  *   回合，反馈会静默滞留到下一条显式输入）；不用 prompt 模板
+ * - /pnl 消息选择器（#82）：ctx.ui.select 列出当前分支最近 25 条非空助手消息，
+ *   默认光标停在最新一条（回车 = 旧行为）、Esc 取消不投递、仅 1 条可选时跳过选择器；
+ *   hasUI=false（无 UI 的宿主，如 print / json）明确报错。选中的仍只是单条消息
+ *   （ADR-0003）。rpc 模式的宿主自带 UI（选择器经 extension_ui_request 转发给客户端），
+ *   故 hasUI=true，不报错
  */
 
 // ── 类型 ───────────────────────────────────────────────────────────────────
@@ -39,9 +44,25 @@ export interface PiLike {
   sendUserMessage(content: string, opts?: unknown): void;
 }
 
+/** UI 选择列表项（对齐宿主 ExtensionUISelectOption）。 */
+interface SelectOption {
+  label: string;
+  description?: string;
+}
+
 export interface CommandCtx {
   cwd: string;
-  ui: { notify(message: string, type: "info" | "error"): void };
+  ui: {
+    notify(message: string, type: "info" | "error"): void;
+    /** 选择列表：返回被选中项的 label；用户取消（Esc）时返回 undefined。 */
+    select(
+      title: string,
+      options: SelectOption[],
+      dialogOptions?: { initialIndex?: number },
+    ): Promise<string | undefined>;
+  };
+  /** false 表示 print / rpc / json 模式：选择器不可用。 */
+  hasUI: boolean;
   sessionManager: {
     getBranch?(): unknown[];
     getEntries?(): unknown[];
@@ -62,6 +83,14 @@ interface RunOptions {
 /** /pnl 反馈前缀：标注载体是会话内消息，反馈只有行号引用，无文件可查。 */
 const PNL_FEEDBACK_PREFIX =
   "这是对你上一条助手消息的标注反馈，请直接处理，无需查找文件。";
+
+/** /pnl 反馈前缀。ordinal 为「倒数第几条助手消息」（1 = 最新一条）：
+ *  ordinal 为 1 时与历史版本逐字一致，N > 1 时指明序号以便 AI 在会话里对位。 */
+function pnlFeedbackPrefix(ordinal: number): string {
+  return ordinal === 1
+    ? PNL_FEEDBACK_PREFIX
+    : `这是对倒数第 ${ordinal} 条助手消息的标注反馈，请直接处理，无需查找文件。`;
+}
 
 // ── Spawn helpers ──────────────────────────────────────────────────────────
 
@@ -295,7 +324,15 @@ function normalizeUserPath(raw: string): string {
   return unquoted;
 }
 
-// ── Last assistant message extraction ──────────────────────────────────────
+// ── Assistant message collection & selector ────────────────────────────────
+
+/** /pnl 选择器最多列出多少条消息（与 plannotator 官方 RECENT_MESSAGES_LIMIT 对齐）。 */
+const PNL_MESSAGE_LIMIT = 25;
+
+const PNL_SELECTOR_TITLE = "Select an assistant message to annotate";
+
+/** 摘要宽度（字符数），超出即截断加省略号。 */
+const SUMMARY_WIDTH = 40;
 
 interface SessionEntry {
   type?: string;
@@ -319,20 +356,57 @@ function contentToText(content: unknown): string {
   return "";
 }
 
-function getLastAssistantText(ctx: CommandCtx): string | undefined {
+/** 倒序收集当前分支上最近的非空助手消息文本（索引 0 = 最新一条，最多 limit 条）。 */
+function collectAssistantTexts(ctx: CommandCtx, limit: number): string[] {
   const manager = ctx.sessionManager;
   const entries =
     (typeof manager?.getBranch === "function"
       ? manager.getBranch()
       : manager?.getEntries?.()) || [];
-  for (let i = entries.length - 1; i >= 0; i--) {
+  const texts: string[] = [];
+  for (let i = entries.length - 1; i >= 0 && texts.length < limit; i--) {
     const entry = entries[i] as SessionEntry | undefined;
     if (entry?.type === "message" && entry.message?.role === "assistant") {
       const text = contentToText(entry.message.content).trim();
-      if (text) return text;
+      if (text) texts.push(text);
     }
   }
-  return undefined;
+  return texts;
+}
+
+/** 剥离 markdown 噪声：标题符号、链接/图片语法、强调符、行内代码符。 */
+function stripMarkdownNoise(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_~`]+/g, "")
+    .trim();
+}
+
+function truncateSummary(line: string): string {
+  return line.length > SUMMARY_WIDTH ? `${line.slice(0, SUMMARY_WIDTH)}…` : line;
+}
+
+/** 首行摘要：首个剥离噪声后非空的行的截断；整行都是噪声时退回首行原文。 */
+function summarizeMessage(text: string): string {
+  let fallback = "";
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const cleaned = stripMarkdownNoise(line);
+    if (cleaned) return truncateSummary(cleaned);
+    if (!fallback) fallback = line;
+  }
+  return truncateSummary(fallback);
+}
+
+/** 选择器选项：label 以「倒数第 N 条」序号前缀保证唯一（宿主回传值只有 label），
+ *  description 给出该消息的体量（字符数）。 */
+function messageOption(text: string, ordinal: number): SelectOption {
+  return {
+    label: `倒数第 ${ordinal} 条 · ${summarizeMessage(text)}`,
+    description: `${text.length} 字符`,
+  };
 }
 
 // ── Extension entry ─────────────────────────────────────────────────────────
@@ -377,21 +451,49 @@ export default function plannotatorCli(pi: PiLike): void {
   // ── /pnl: Annotate Last Message ────────────────────────────────────────
 
   pi.registerCommand("pnl", {
-    description: "Annotate the last assistant message in Plannotator",
+    description: "Annotate a recent assistant message in Plannotator",
     handler: async (_args, ctx) => {
-      const lastText = getLastAssistantText(ctx);
-      if (!lastText) {
+      // 选择器只在有 UI 的宿主里可用（hasUI=false 的 print/json 等模式）：
+      // 明确报错，而不是静默退化成"标注最后一条"。
+      if (!ctx.hasUI) {
+        ctx.ui.notify(
+          "/pnl requires an interactive terminal (no UI available in this session).",
+          "error",
+        );
+        return;
+      }
+
+      const texts = collectAssistantTexts(ctx, PNL_MESSAGE_LIMIT);
+      if (texts.length === 0) {
         ctx.ui.notify("No assistant message found in session.", "error");
         return;
       }
 
-      ctx.ui.notify("Opening annotation UI for last message...", "info");
+      // 选项从新到旧，故 initialIndex: 0 即最新一条（回车 = 旧行为）；
+      // 只有一条可选消息时不弹选择器。
+      let ordinal = 1;
+      if (texts.length > 1) {
+        const options = texts.map((text, i) => messageOption(text, i + 1));
+        const picked = await ctx.ui.select(PNL_SELECTOR_TITLE, options, { initialIndex: 0 });
+        if (picked === undefined) return; // Esc：静默取消，不投递
+        const index = options.findIndex((option) => option.label === picked);
+        if (index < 0) return; // 回传了未知 label：按取消处理
+        ordinal = index + 1;
+      }
+      const message = texts[ordinal - 1];
+
+      ctx.ui.notify(
+        ordinal === 1
+          ? "Opening annotation UI for last message..."
+          : `Opening annotation UI for assistant message ${ordinal} back...`,
+        "info",
+      );
       // 消息内容经 stdin 传入（--stdin），无临时文件生命周期。
       void runPlannotator(pi, ctx, ["annotate-last", "--stdin", "--json"], {
         label: "Annotation",
         json: true,
-        stdin: lastText,
-        feedbackPrefix: PNL_FEEDBACK_PREFIX,
+        stdin: message,
+        feedbackPrefix: pnlFeedbackPrefix(ordinal),
       });
     },
   });
