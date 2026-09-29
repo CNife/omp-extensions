@@ -12,7 +12,8 @@
  * 命令文件不会被加载。
  *
  * 成员清单解析顺序：
- * 1. ~/.omp/agent/panel-members.md（个人覆盖，内容为若干行 ^provider/id）
+ * 1. ~/.omp/agent/consultants.md（个人覆盖，内容为若干行 ^provider/id；存在但
+ *    没有任何标签 = 明确清空面板，不派发；仅 ENOENT 时回退默认成员）
  * 2. 内置默认成员（DEFAULT_MEMBERS）
  * 个人覆盖文件不会被 omp plugin upgrade 覆盖。
  */
@@ -38,16 +39,13 @@ export interface PiLike {
 			handler: (args: string | undefined, ctx: CommandCtx) => void | Promise<void>;
 		},
 	): void;
-	sendUserMessage(content: string, opts?: unknown): void;
+	sendUserMessage(content: string): void;
 }
 
 export interface CommandCtx {
 	/** 宿主模式；print/json 等无 UI 宿主无法承载命令触发的后续回合。 */
 	mode?: string;
 	hasUI?: boolean;
-	ui?: {
-		notify(message: string, type: "info" | "error"): void;
-	};
 }
 
 /** 逐行提取 ^provider/id 标签；空行与注释行忽略。 */
@@ -76,13 +74,20 @@ export default function activate(pi: PiLike): void {
 				);
 				return;
 			}
+			// 个人覆盖文件：存在即生效（哪怕解析后为空 = 明确清空面板，不派发）；
+			// 仅 ENOENT 视为未配置，回退默认成员；其他读取失败警告后回退。
 			let tags = DEFAULT_MEMBERS;
 			try {
 				const override = fs.readFileSync(path.join(os.homedir(), OVERRIDE_FILE), "utf8");
-				const parsed = parseMembers(override);
-				if (parsed.length > 0) tags = parsed;
-			} catch {
-				// 无个人覆盖文件，用默认成员
+				tags = parseMembers(override);
+			} catch (err) {
+				if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+					process.stderr.write(`ask-consultants: 读取 ${OVERRIDE_FILE} 失败，回退默认成员。\n`);
+				}
+			}
+			if (tags.length === 0) {
+				process.stderr.write(`ask-consultants: ${OVERRIDE_FILE} 存在但没有任何 ^ 标签，本次不派发成员。\n`);
+				return;
 			}
 
 			const target = args?.trim() ? args.trim() : "（待补充评审对象——请先运行 /ask-consultants <评审对象>）";

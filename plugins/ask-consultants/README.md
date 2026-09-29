@@ -13,7 +13,7 @@
 
 ## 配置成员
 
-个人覆盖文件 `~/.omp/agent/consultants.md`：内容为若干行 `^provider/id` 标签（一行一个，`#` 注释行忽略），存在即覆盖插件默认成员。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
+个人覆盖文件 `~/.omp/agent/consultants.md`：内容为若干行 `^provider/id` 标签（一行一个，`#` 注释行忽略）。存在即生效——没有任何标签 = 明确清空面板、本次不派发；文件不存在才回退插件默认成员。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
 
 selector 须精确匹配 `provider/id`，不含 effort 后缀（如 `openai-codex/gpt-6-sol:high` 应写 `^openai-codex/gpt-6-sol`）。
 
