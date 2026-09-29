@@ -64,14 +64,23 @@ export default function activate(pi: PiLike): void {
 				return;
 			}
 			// 个人覆盖文件：存在即生效（members 为空 = 明确清空面板，不派发）；
-			// 仅 ENOENT 视为未配置，回退默认成员；其他读取失败警告后回退。
+			// 仅 ENOENT 视为未配置，回退默认成员；读取失败警告后回退；
+			// JSON 解析失败视为配置未完成，明确不派发——不能悄悄换成默认成员。
 			let tags = DEFAULT_MEMBERS;
+			let override: string | undefined;
 			try {
-				const override = fs.readFileSync(path.join(os.homedir(), OVERRIDE_FILE), "utf8");
-				tags = parseMembers(override);
+				override = fs.readFileSync(path.join(os.homedir(), OVERRIDE_FILE), "utf8");
 			} catch (err) {
 				if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
 					process.stderr.write(`ask-consultants: 读取 ${OVERRIDE_FILE} 失败，回退默认成员。\n`);
+				}
+			}
+			if (override !== undefined) {
+				try {
+					tags = parseMembers(override);
+				} catch {
+					process.stderr.write(`ask-consultants: ${OVERRIDE_FILE} 不是有效 JSON，本次不派发成员。请修复后再试。\n`);
+					return;
 				}
 			}
 			if (tags.length === 0) {

@@ -21,7 +21,7 @@
 }
 ```
 
-存在即生效——`members` 为空数组 = 明确清空面板、本次不派发；文件不存在才回退插件默认成员。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
+存在即生效——`members` 为空数组 = 明确清空面板、本次不派发；文件不存在才回退插件默认成员；JSON 写错时明确报错不派发（不会悄悄换成默认成员）。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
 
 selector 须精确匹配 `provider/id`，不含 effort 后缀（如 `openai-codex/gpt-6-sol:high` 应写 `^openai-codex/gpt-6-sol`）。
 
