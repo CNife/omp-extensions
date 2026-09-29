@@ -36,8 +36,8 @@
       "version": "0.2.0"
     },
     {
-      "name": "ask-consultants",
-      "description": "多模型顾问团面板：/ask-consultants 一步注册成员伪名，技能并行扇出独立评审并汇总对比",
+			"name": "ask-consultants",
+			"description": "/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
       "source": "./plugins/ask-consultants",
       "version": "0.1.0"
     }

@@ -13,7 +13,15 @@
 
 ## 配置成员
 
-个人覆盖文件 `~/.omp/agent/consultants.md`：内容为若干行 `^provider/id` 标签（一行一个，`#` 注释行忽略）。存在即生效——没有任何标签 = 明确清空面板、本次不派发；文件不存在才回退插件默认成员。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
+个人覆盖文件 `~/.omp/agent/cnife-ask-consultants.json`：
+
+```json
+{
+	"members": ["^openai-codex/gpt-6-sol", "^ark-coding-plan/glm-5.3-flash"]
+}
+```
+
+存在即生效——`members` 为空数组 = 明确清空面板、本次不派发；文件不存在才回退插件默认成员。该文件不属于插件，不会被 `omp plugin upgrade` 冲掉。
 
 selector 须精确匹配 `provider/id`，不含 effort 后缀（如 `openai-codex/gpt-6-sol:high` 应写 `^openai-codex/gpt-6-sol`）。
 
@@ -26,4 +34,4 @@ selector 须精确匹配 `provider/id`，不含 effort 后缀（如 `openai-code
 
 ## 为什么命令走扩展而不是清单 commands
 
-omp 插件清单的 `commands` 键目前是死管道（`resolvePluginCommandPaths` 无调用方，命令发现不扫插件根），清单声明的命令文件不会被加载。本插件的扩展只做一件事：读成员清单 → `sendUserMessage` 投递 `^` 标签——伪名注册经用户消息路径生效（`expandMentions` 不受 `expandPromptTemplates: false` 影响）。
+omp 插件清单的 `commands` 键目前是死管道，清单声明的命令文件不会被加载。本插件的扩展只做一件事：读成员清单 → `sendUserMessage` 投递 `^` 标签——伪名注册经用户消息路径生效（`expandMentions` 不受 `expandPromptTemplates: false` 影响）。取舍详见 [ADR 0004](../../docs/adr/0004-plugin-commands-dead-pipe.md)。

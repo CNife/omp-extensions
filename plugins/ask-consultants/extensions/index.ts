@@ -7,15 +7,11 @@
  * (expandPromptTemplates:false) 但 expandMentions 不受该旗标影响，
  * 因此本扩展投递的 ^ 标签会正常注册为 m1、m2、…。
  *
- * 为什么不用 manifest commands 键：omp 插件的 commands 声明目前是死管道
- * （resolvePluginCommandPaths 无调用方，命令发现不扫插件根），清单声明的
- * 命令文件不会被加载。
+ * 为什么不用 manifest commands 键声明命令：见 docs/adr/0004-plugin-commands-dead-pipe.md。
  *
- * 成员清单解析顺序：
- * 1. ~/.omp/agent/consultants.md（个人覆盖，内容为若干行 ^provider/id；存在但
- *    没有任何标签 = 明确清空面板，不派发；仅 ENOENT 时回退默认成员）
- * 2. 内置默认成员（DEFAULT_MEMBERS）
- * 个人覆盖文件不会被 omp plugin upgrade 覆盖。
+ * 成员清单解析顺序：~/.omp/agent/cnife-ask-consultants.json（个人覆盖，
+ * 结构见 README；members 为空 = 明确清空面板，不派发；仅 ENOENT 时回退
+ * 内置默认成员 DEFAULT_MEMBERS）。覆盖文件不会被 omp plugin upgrade 覆盖。
  */
 
 import * as fs from "node:fs";
@@ -28,7 +24,7 @@ const DEFAULT_MEMBERS = [
 	"^opencode-go/deepseek-v4.1-flash",
 ];
 
-const OVERRIDE_FILE = ".omp/agent/consultants.md";
+const OVERRIDE_FILE = ".omp/agent/cnife-ask-consultants.json";
 
 /** 插件用到的 omp ExtensionAPI 最小面（与 @earendil-works/pi-coding-agent 对齐）。 */
 export interface PiLike {
@@ -48,22 +44,15 @@ export interface CommandCtx {
 	hasUI?: boolean;
 }
 
-/** 逐行提取 ^provider/id 标签；空行与注释行忽略。 */
+/** 解析个人覆盖配置：{"members": ["^provider/id", …]}；非数组视为无成员。 */
 export function parseMembers(text: string): string[] {
-	const tags: string[] = [];
-	for (const line of text.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("<!--") || trimmed.startsWith("#")) continue;
-		for (const match of trimmed.matchAll(/(^|\s)\^([^\s^]+)/g)) {
-			tags.push(`^${match[2]}`);
-		}
-	}
-	return tags;
+	const config = JSON.parse(text) as { members?: unknown };
+	return Array.isArray(config.members) ? config.members.map(String) : [];
 }
 
 export default function activate(pi: PiLike): void {
 	pi.registerCommand("ask-consultants", {
-		description: "召集多模型顾问团：一步注册面板成员伪名并按 ask-consultants 技能评审",
+		description: "用多模型顾问团评审：注册面板成员伪名并并行征询各成员的独立意见",
 		handler: async (args, ctx) => {
 			// print/json 宿主里，命令消费初始 prompt 后进程即收场，sendUserMessage
 			// 起的回合会被杀掉——与其静默无输出，不如明确告知改用交互式会话。
@@ -74,7 +63,7 @@ export default function activate(pi: PiLike): void {
 				);
 				return;
 			}
-			// 个人覆盖文件：存在即生效（哪怕解析后为空 = 明确清空面板，不派发）；
+			// 个人覆盖文件：存在即生效（members 为空 = 明确清空面板，不派发）；
 			// 仅 ENOENT 视为未配置，回退默认成员；其他读取失败警告后回退。
 			let tags = DEFAULT_MEMBERS;
 			try {
@@ -86,7 +75,7 @@ export default function activate(pi: PiLike): void {
 				}
 			}
 			if (tags.length === 0) {
-				process.stderr.write(`ask-consultants: ${OVERRIDE_FILE} 存在但没有任何 ^ 标签，本次不派发成员。\n`);
+				process.stderr.write(`ask-consultants: ${OVERRIDE_FILE} 的 members 为空，本次不派发成员。\n`);
 				return;
 			}
 

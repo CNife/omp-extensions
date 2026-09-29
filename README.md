@@ -29,6 +29,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 | [cache-miss-notices](plugins/cache-miss-notices/) | 显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices |
 | [howto-skills](plugins/howto-skills/) | how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线 |
 | [plannotator-cli](plugins/plannotator-cli/) | Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令 |
+| [ask-consultants](plugins/ask-consultants/) | /ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比 |
 
 ## 添加新插件
 
