@@ -44,8 +44,9 @@ export interface ModelMenuItem {
 }
 
 /**
- * 构建菜单行：当前可用模型 ∪ 配置里登记但当前不可用的 selector（字母序混排）。
- * 后者必须保留在菜单里，否则 toggle 任一行整体保存时会把它悄悄丢掉。
+ * 构建菜单行：当前可用模型 ∪ 配置里登记但当前不可用的 selector。
+ * 已启用（含登记但当前不可用）的排最前，两组内部各按字母序。
+ * 登记但不可用的条目必须保留在菜单里，否则 toggle 任一行整体保存时会把它悄悄丢掉。
  */
 export function buildModelMenuItems(
 	models: readonly ModelLike[],
@@ -66,7 +67,9 @@ export function buildModelMenuItems(
 			items.set(selector, { selector, label: `${selector} (not available)`, enabled: true });
 		}
 	}
-	return [...items.values()].sort((a, b) => a.label.localeCompare(b.label));
+	return [...items.values()].sort((a, b) =>
+		a.enabled === b.enabled ? a.label.localeCompare(b.label) : a.enabled ? -1 : 1,
+	);
 }
 
 /** toggle 一个 selector：on 追加到尾部，off 移除；返回新数组（入参不变）。 */

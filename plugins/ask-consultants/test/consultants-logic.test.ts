@@ -81,19 +81,20 @@ test("parseMembers: 非法 JSON 抛 SyntaxError（不悄悄回退默认）", () 
 // buildModelMenuItems
 // ============================================================================
 
-test("buildModelMenuItems: 全量候选 + 选中态，字母序", () => {
-	const models = [makeModel("zeta", "m1"), makeModel("alpha", "m2")];
-	deepStrictEqual(buildModelMenuItems(models, ["zeta/m1"]), [
-		{ selector: "alpha/m2", label: "alpha/m2", enabled: false },
+test("buildModelMenuItems: 已启用排最前，组内字母序", () => {
+	const models = [makeModel("zeta", "m1"), makeModel("alpha", "m2"), makeModel("mid", "m9")];
+	deepStrictEqual(buildModelMenuItems(models, ["zeta/m1", "mid/m9"]), [
+		{ selector: "mid/m9", label: "mid/m9", enabled: true },
 		{ selector: "zeta/m1", label: "zeta/m1", enabled: true },
+		{ selector: "alpha/m2", label: "alpha/m2", enabled: false },
 	]);
 });
 
-test("buildModelMenuItems: 配置里登记但当前不可用的条目保留并加后缀", () => {
+test("buildModelMenuItems: 配置里登记但当前不可用的条目保留并加后缀，随启用组排前", () => {
 	const models = [makeModel("alpha", "m2")];
 	deepStrictEqual(buildModelMenuItems(models, ["gone/m1"]), [
-		{ selector: "alpha/m2", label: "alpha/m2", enabled: false },
 		{ selector: "gone/m1", label: "gone/m1 (not available)", enabled: true },
+		{ selector: "alpha/m2", label: "alpha/m2", enabled: false },
 	]);
 });
 

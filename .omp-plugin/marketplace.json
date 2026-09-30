@@ -39,7 +39,7 @@
 			"name": "ask-consultants",
 			"description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
 			"source": "./plugins/ask-consultants",
-			"version": "0.2.0"
+			"version": "0.2.1"
     }
   ]
 }
