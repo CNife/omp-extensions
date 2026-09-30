@@ -7,8 +7,8 @@
  * effort 后缀（如 `:high`）从来不属于 selector，不因去 `^` 而引入。
  */
 
-/** 裸 selector：恰好一个 `/`，无空白、无 `^` 前缀。 */
-export const SELECTOR_RE = /^[^\s/^]+\/[^\s/^]+$/;
+/** 裸 selector：`provider/id`，id 可含 `/`（如 openrouter 的 `~anthropic/claude-fable-latest`）；各段非空，无空白、无 `^`。 */
+export const SELECTOR_RE = /^[^\s/^]+(?:\/[^\s/^]+)+$/;
 
 export const DEFAULT_MEMBERS = [
 	"openai-codex/gpt-6-sol",
@@ -16,10 +16,12 @@ export const DEFAULT_MEMBERS = [
 	"opencode-go/deepseek-v4.1-flash",
 ];
 
-/** 解析配置 JSON：{"members": ["provider/id", …]}；非数组视为无成员。 */
+/** 解析配置 JSON：{"members": ["provider/id", …]}；null/标量/非数组 members 均视为无成员。 */
 export function parseMembers(text: string): string[] {
-	const config = JSON.parse(text) as { members?: unknown };
-	return Array.isArray(config.members) ? config.members.map(String) : [];
+	const config: unknown = JSON.parse(text);
+	if (config === null || typeof config !== "object" || !("members" in config)) return [];
+	const members: unknown = config.members;
+	return Array.isArray(members) ? members.map(String) : [];
 }
 
 /** 返回不符合裸 selector 格式的成员（含 0.1.x 的 `^` 前缀旧格式）。 */

@@ -26,16 +26,20 @@ function makeModel(provider: string, id: string): ModelLike {
 // SELECTOR_RE / invalidMembers
 // ============================================================================
 
-test("SELECTOR_RE: 裸 provider/id 合法", () => {
+test("SELECTOR_RE: 裸 provider/id 合法，id 可含斜杠", () => {
 	ok(SELECTOR_RE.test("openai-codex/gpt-6-sol"));
 	ok(SELECTOR_RE.test("ark-coding-plan/glm-5.3-flash"));
+	ok(SELECTOR_RE.test("openrouter/~anthropic/claude-fable-latest"));
+	ok(SELECTOR_RE.test("aiand/deepseek-ai/deepseek-v4-flash"));
 });
 
-test("SELECTOR_RE: 拒绝 ^ 前缀、空白、缺斜杠、多斜杠", () => {
+test("SELECTOR_RE: 拒绝 ^ 前缀、空白、缺斜杠、空段、尾斜杠", () => {
 	ok(!SELECTOR_RE.test("^openai-codex/gpt-6-sol"));
 	ok(!SELECTOR_RE.test("openai-codex /gpt-6"));
 	ok(!SELECTOR_RE.test("openai-codex"));
-	ok(!SELECTOR_RE.test("a/b/c"));
+	ok(!SELECTOR_RE.test("a//b"));
+	ok(!SELECTOR_RE.test("a/b/"));
+	ok(!SELECTOR_RE.test("/a/b"));
 	ok(!SELECTOR_RE.test(""));
 });
 
@@ -57,6 +61,10 @@ test("parseMembers: 合法配置原样返回", () => {
 test("parseMembers: members 非数组视为无成员（明确清空）", () => {
 	deepStrictEqual(parseMembers('{"members": "a/b"}'), []);
 	deepStrictEqual(parseMembers("{}"), []);
+});
+
+test("parseMembers: 顶层 null 视为无成员（不抛 TypeError）", () => {
+	deepStrictEqual(parseMembers("null"), []);
 });
 
 test("parseMembers: 非法 JSON 抛 SyntaxError（不悄悄回退默认）", () => {
