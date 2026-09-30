@@ -28,6 +28,7 @@ import {
 import {
 	Container,
 	type SettingItem,
+	type SettingsListTheme,
 	SettingsList,
 	Text,
 } from "@oh-my-pi/pi-tui";
@@ -70,6 +71,23 @@ export interface CommandCtx {
 export interface UiTheme {
 	fg(color: string, text: string): string;
 	bold(text: string): string;
+}
+
+/**
+ * 包装 SettingsList 主题：启用中的条目 label 用 success 色高亮，其余走默认主题。
+ * `enabled` 按 label 文本记录（渲染时主题 label 函数查询它），toggle 时由 onChange
+ * 增删，面板每次输入都 requestRender，所以高亮即时跟随状态。
+ */
+function withEnabledHighlight(
+	base: SettingsListTheme,
+	ui: UiTheme,
+	enabled: ReadonlySet<string>,
+): SettingsListTheme {
+	return {
+		...base,
+		label: (text, selected, changed) =>
+			enabled.has(text) ? ui.fg("success", text) : base.label(text, selected, changed),
+	};
 }
 
 function saveMembers(members: string[]): void {
@@ -129,6 +147,9 @@ export default function activate(pi: PiLike): void {
 					currentValue: it.enabled ? "enabled" : "disabled",
 					values: ["enabled", "disabled"],
 				}));
+				// 启用条目的 label 集合：渲染时主题函数查它来高亮，toggle 时同步增删。
+				const enabledLabels = new Set(items.filter((it) => it.enabled).map((it) => it.label));
+				const labelBySelector = new Map(items.map((it) => [it.selector, it.label] as const));
 
 				const container = new Container();
 				container.addChild(new DynamicBorder((s: string) => theme.fg("border", s)));
@@ -137,10 +158,15 @@ export default function activate(pi: PiLike): void {
 				const settingsList = new SettingsList(
 					settingItems,
 					Math.min(settingItems.length + 2, 15),
-					getSettingsListTheme(),
+					withEnabledHighlight(getSettingsListTheme(), theme, enabledLabels),
 					(id: string, newValue: string) => {
 						selected = toggleSelected(selected, id, newValue === "enabled");
 						saveMembers(selected);
+						const label = labelBySelector.get(id);
+						if (label !== undefined) {
+							if (newValue === "enabled") enabledLabels.add(label);
+							else enabledLabels.delete(label);
+						}
 					},
 					() => {
 						done(undefined);

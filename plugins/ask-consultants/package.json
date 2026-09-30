@@ -1,6 +1,6 @@
 {
   "name": "ask-consultants",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "多模型顾问团面板：/consultants 选择成员、/ask-consultants 一步注册成员伪名，技能并行扇出独立评审并汇总对比",
   "private": true,
   "license": "MIT",
