@@ -9,7 +9,7 @@
 
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
-import { nmemRequest } from "../extensions/nmem.ts";
+import { nmemRequest } from "../extensions/rest.ts";
 
 // ============================================================================
 // Fixtures
