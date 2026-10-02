@@ -1,6 +1,6 @@
 {
   "name": "nmem",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "nmem 会话自动同步 + opt-in 引导注入",
   "private": true,
   "license": "MIT",
