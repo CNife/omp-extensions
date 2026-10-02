@@ -162,10 +162,11 @@ async function parseErrorDetail(response: Response): Promise<string> {
  * parsing. Retries transient faults (timeout / backend_unreachable / 5xx).
  * Throws NmemError on any non-2xx or network failure; returns parsed JSON.
  */
-async function nmemRequest<T = unknown>(
+export async function nmemRequest<T = unknown>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
+  options?: { fetch?: typeof fetch },
 ): Promise<T> {
   const config = resolveConfig();
   const url = buildUrl(config.apiUrl, path);
@@ -179,11 +180,12 @@ async function nmemRequest<T = unknown>(
   const timeoutMs = DEFAULT_TIMEOUT_MS;
 
   const doFetch = async (): Promise<T> => {
+    const fetchImpl = options?.fetch ?? fetch;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await fetchImpl(url, {
         method,
         headers,
         body: serialized,
