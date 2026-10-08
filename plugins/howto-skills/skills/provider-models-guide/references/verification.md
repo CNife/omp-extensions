@@ -32,7 +32,7 @@
 
 1. **启动 schema**：沙箱 agent 目录放入 `models.yml` 后 `omp models --json`，确认配置通过 schema 校验、未知 compat key 无警告、模型挂在预期 provider 下。
 2. **静态面**：`omp models --json` 核对声明的 limits / `input` / `cost`；`omp models` 表格核对 `images` 列与预期传输行为（被 `stripImageInput` 剥图的模型显示 `no`——预期剥图就合格）。
-3. **真实调用**：`PI_REQ_DEBUG=1`（可配回显探针或真端点）跑一次带工具的对话，核对 wire body——model id、reasoning 参数、tools、stream 选项；对 `openai-completions` 端点可与探针日志逐字节交叉验证。
+3. **真实调用**：`PI_REQ_DEBUG=1` 对**真实目标端点**至少发一次请求，核对成功响应（认证可用、模型应答）与适用的工具闭环——这一步的回答对象是目标端点本身。回显探针只作请求形状的补充取证：对 `openai-completions` 端点可与探针日志逐字节交叉验证，探针自己的应答不构成目标端点的证据。
 4. **缓存实测**：`omp bench --cache` 跑冷/暖对（仅当声明/期望缓存），暖请求 `cache-read` > 0 即命中。
 5. **JSONL 断言**：检查沙箱 session JSONL——缓存命中值 > 0、`stopReason` 非 `error`、usage/cost 数值与费率对得上。
 

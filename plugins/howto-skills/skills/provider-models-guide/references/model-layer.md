@@ -58,9 +58,9 @@ providers:
 - `input: [text, image]` 不保证图片真送达：catalog class 规则可独立设置 `compat.stripImageInput` 剥除图片（per-model compat 可置 false 反转；`pi-native` 传输不跑客户端剥除）。18.6.3 起非官方 Responses host 默认 `supportsImageDetailOriginal: false`，图片 detail 语义进一步收紧。**`omp models` 表格的 `images` 列报告传输实际发送的内容**，比声明 `input` 可信。
 - 改名/删除 model id 后，保存过该模型的旧会话 resume 会显式报错 `Could not restore model <provider>/<id>`（18.6.3 起；有 UI 且 `retry.modelFallback` 开启时降级为警告）。重命名 id 前想到这一点。
 
-## cost：四项必填与平面费率
+## cost：平面费率覆盖（models[] 四项必填）
 
-**判断**：显式写 `cost` 就是一次平面费率覆盖——四项缺一不可，漏掉 `cacheWrite` 会让整份自定义 provider 配置失效（schema 校验直接拒绝，实测确认）。不想负责定价就整个不写，让价格继承 catalog。
+**判断**：`models[]` 自定义模型显式写 `cost` 就是一次平面费率覆盖——四项缺一不可，漏掉 `cacheWrite` 会让整份自定义 provider 配置失效（schema 校验直接拒绝，实测确认）；`modelOverrides` 的 `cost` 四项全部可选，只写想改的项，属部分覆盖。不想负责定价就整个不写，让价格继承 catalog。
 
 - 单位：USD / 百万 token，四项 `input` / `output` / `cacheRead` / `cacheWrite`。
 - 显式 `cost` 是平面费率覆盖，同时禁用继承的时间计价（分时折扣不再生效）。

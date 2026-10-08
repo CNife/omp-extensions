@@ -34,7 +34,8 @@ disable-model-invocation: true
 什么问题去哪篇 → [`references/provider-layer.md`](references/provider-layer.md)：
 
 - 改动归位拿不准（新 provider / 覆盖内置 / 元数据覆盖 / 加条目）→ 开篇归位表。
-- auth 怎么选、`!cmd` 秘密的异步解析与轮转语义 → auth 家族节。
+- auth 怎么选（env / `!cmd` / 字面量、`auth: none` / `oauth`）→ auth 家族节。
+- `!cmd` 秘密何时真正解析、轮转后的刷新路径 → 凭据是异步解析的节。
 - discovery 各类型怎么选（第七类 `apple-foundation-models` 是 Mac 内建隐式传输，不走 HTTP）、各类型最小配置、401/403 的语义 → discovery 节（`proxy` 是唯一可省 provider 级 `api` 的类型，per-model 自动探测）。
 - 内建 provider 改 `baseUrl` 的生效 scope、Bedrock host 改写 → baseUrl 覆盖节。
 - `remoteCompaction` / `promptCache` / `cacheWarming` 归哪层哪个文件 → 上下文与压缩归位节。
@@ -47,7 +48,7 @@ disable-model-invocation: true
 - model 条目有两种落点：`providers.<provider>.models[]`（自定义模型）与 `providers.<provider>.modelOverrides`（只覆盖内建模型的元数据，不重新声明）。
 - 条目的职责是把「一个端点上的模型」翻译成本地元数据：id、能力、预算、价格、thinking 声明。声明 ≠ 端点行为——`omp models` 表格的 `images` 列才是实际发送面。
 - `input` 只有两个合法值：`[text]`、`[text, image]`。
-- `cost` 四项 `input` / `output` / `cacheRead` / `cacheWrite`（USD / 百万 token）缺一不可，漏项会让整份自定义 provider 配置失效；不想负责定价就整个不写，让价格继承 catalog。
+- `cost`（USD / 百万 token）：自定义模型（`models[]`）显式写时四项 `input` / `output` / `cacheRead` / `cacheWrite` 缺一不可，漏项会让整份自定义 provider 配置失效；`modelOverrides` 的 `cost` 四项全可选，只写要改的项。不想负责定价就整个不写，让价格继承 catalog。
 - `maxContextWindow` 只放宽 omp 本地预算（更晚压缩），服务端限制原样；设大前先确认端点接受更大的请求。
 - 工作负载角色分配（memory / small / judge 等 `modelRoles`）写在 config.yml；models.yml 只定义 provider 与模型元数据。
 
@@ -82,7 +83,7 @@ disable-model-invocation: true
 
 验证四问：**通不通**（端点可达、认证可用）、**参数对不对**（wire 请求形状）、**工具**（tool call 闭环）、**缓存**（真命中）。按能力门控：配置里没声明的能力对应项标 N/A；HTTP 200 也只是端点应答了，不构成能力与 usage 语义的证据。
 
-所有验证在沙箱里跑：临时 cwd + `PI_CODING_AGENT_DIR=<临时目录>` 重定位 + `--no-extensions --no-skills --no-rules`，产物用完即清，真实 agent 目录零痕迹。五通道：`omp models --json`（静态面）、`PI_REQ_DEBUG=1`（wire 原文，含鉴权，禁止提交、用完即删）、回显探针 `scripts/echo-endpoint.py`（请求形状 + 工具闭环，仅 `openai-completions` 方言可跑完）、`omp bench --cache`（缓存命中）、session JSONL（usage 语义，看值不看键）。
+所有验证在沙箱里跑：临时 cwd + `PI_CODING_AGENT_DIR=<临时目录>` 重定位 + `--no-extensions --no-skills --no-rules`，产物用完即清，真实 agent 目录零痕迹。五通道：`omp models --json`（静态面）、`PI_REQ_DEBUG=1`（wire 原文，含鉴权，禁止提交、用完即删）、回显探针 `scripts/echo-endpoint.py`（请求形状取证，仅 `openai-completions` 方言能应答跑完）、`omp bench --cache`（缓存命中）、session JSONL（usage 语义，看值不看键）。通不通、工具闭环这些目标端点的问题，最终以真实端点的请求为准，探针只是形状参考。
 
 什么问题去哪篇 → [`references/verification.md`](references/verification.md)：
 
