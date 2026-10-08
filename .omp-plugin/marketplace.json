@@ -1,15 +1,17 @@
 {
   "name": "omp-extensions",
-  "owner": { "name": "CNife" },
+  "owner": {
+    "name": "CNife"
+  },
   "metadata": {
     "description": "CNife 的 OMP 扩展集合"
   },
   "plugins": [
     {
       "name": "howto-skills",
-      "description": "how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线、长任务托管与等待",
+      "description": "how-to 技能合集：browser 提取打法、TTSR 规则编写、provider/model 配置指南、长任务托管与等待",
       "source": "./plugins/howto-skills",
-      "version": "0.2.1"
+      "version": "0.3.0"
     },
     {
       "name": "nmem",
@@ -36,10 +38,10 @@
       "version": "0.2.0"
     },
     {
-			"name": "ask-consultants",
-			"description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
-			"source": "./plugins/ask-consultants",
-			"version": "0.2.2"
+      "name": "ask-consultants",
+      "description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
+      "source": "./plugins/ask-consultants",
+      "version": "0.2.2"
     }
   ]
 }
