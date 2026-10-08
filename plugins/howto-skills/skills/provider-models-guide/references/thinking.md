@@ -40,7 +40,7 @@ providers:
 | `model.thinking.effortMap` | 模型元数据 | 模型自身的档位裁剪/改名（如该模型没有 `xhigh`，`xhigh → high`） | 自定义模型的上游档位名与 OMP 内部档位不一致 |
 | `compat.reasoningEffortMap` | compat 覆盖 | 端点方言的字符串替换（如 Fireworks GLM 的 `minimal → "none"`） | 验证取证发现 wire 上的 effort 字符串不被端点接受 |
 
-应用顺序：**`compat.reasoningEffortMap` 先映射，`model.thinking.effortMap` 后映射**。判断：模型能力裁剪写前者是错层（那是 compat 干的事），端点方言修正写后者也是错层。默认两者都不写——catalog/KDL 已覆盖内建模型；自定义模型只有实测 wire 值不对才加，证据链与其他 compat 键相同（症状 → `PI_REQ_DEBUG` → 键名）。
+应用顺序：**`compat.reasoningEffortMap` 先映射，`model.thinking.effortMap` 后映射**。归属：模型能力裁剪（档位集裁剪/改名）写 `model.thinking.effortMap`；端点方言修正（wire 字符串替换）写 `compat.reasoningEffortMap`。默认两者都不写——catalog/KDL 已覆盖内建模型；自定义模型只有实测 wire 值不对才加，证据链与其他 compat 键相同（症状 → `PI_REQ_DEBUG` → 键名）。
 
 ## thinkingFormat：五方言的判据
 
@@ -81,11 +81,3 @@ providers:
 ```
 
 `requiresEffort` / `supportsDisplay` / `defaultLevel` 等字段清单见 `omp://models.md §Compatibility and routing fields → Reasoning/thinking`。
-
-## 旧文档的作废断言
-
-旧 `add-provider-models/references/thinking-adaptation.md` 的以下说法**不要沿用**：
-
-- 「`efforts` 是可独立使用的字段 / thinking 的唯一入口」——错。schema 要求 `thinking.mode` 必填，`efforts` 只是 mode 之下的档位列表；`effortMap` 也可挂 `model.thinking`。
-- 「`mode: budget` 是 provider 风格语法」——错。mode 五取值里没有哪个是「provider 风格」，`budget` 表示 token 预算机制，与 provider 无关。
-- 「`thinking_budget` 等 wire 参数是 models.yml 字段」——错。wire 参数（`thinking_budget`、`reasoning_effort` 等）只出现在「OMP 会发什么」的解释里，永远不进 `models.yml` 配置。

@@ -21,7 +21,7 @@
 | `omp models --json` | 静态面：配置是否通过 schema、模型是否出现在预期 provider 下、limits/reasoning/`input`/`cost` 是否如预期 | 表格的 **`images` 列才是实际发送**（被 `stripImageInput` 剥图的模型显示 `no`）；`--json` 保留声明 `input` | 可见性 ≠ 请求成功；输出不含传输 `api`；discovery 401/403 会在此暴露，别误读成「没有模型」 |
 | `PI_REQ_DEBUG=1` | **主干**：wire 请求/响应原文 | 每次实际 fetch 在**当前 cwd** 写 `rr-session-N.json`（请求）+ `rr-session-N.res.log`（响应）；含 Authorization 与完整 body | auth 重试每次尝试各得一份 dump（stamp 机制防重复叠加）。**敏感性：含鉴权与完整上下文——禁止提交、禁止贴出，用完即删** |
 | 回显探针 `scripts/echo-endpoint.py` | 请求形状 + 终止语义闭环 | 探针 JSONL 日志逐行核对 path/headers/body，与 `PI_REQ_DEBUG` 交叉验证 | 只对 `openai-completions` 能应答跑完；其他方言请求照发、body 照抓，但 omp 等不到自己方言的响应事件会挂到超时——**只能回答「请求长什么样」，不能回答「响应解析对不对」** |
-| `omp bench --cache` | 缓存是否真命中 | 冷/暖对（cold/warm pairs）的 TTFT 与 tok/s 对比；暖请求显著更快才算命中 | `--cache-prefix-bytes`（默认 8192）控制稳定前缀体量；`openai-codex-responses` 不支持；只对声明/期望缓存的模型跑 |
+| `omp bench --cache` | 缓存是否真命中 | 命中判据：暖请求的缓存 usage 值 > 0（输出里的 `cache-read` 列）；TTFT 与 tok/s 只是性能观测，不是命中判据 | `--cache-prefix-bytes`（默认 8192）控制稳定前缀体量；`openai-codex-responses` 不支持；只对声明/期望缓存的模型跑 |
 | session JSONL | 端到端 usage 语义 | **看值不看键**：assistant 消息里缓存命中值 > 0（omp 记 `cacheRead`；wire 层面是 `cached_tokens`）、`stopReason != "error"` | `/dump` 只在 TUI/ACP/RPC 交互面可用，`omp -p "/dump"` 不执行 slash command |
 
 回显探针的终止语义（详见脚本头注释与 issue #85）：请求里出现 `role="tool"` 即一律回纯文本；`ECHO_TOOL_CALL=1` 只在首个请求回一次 tool call；`ECHO_MAX_REQUESTS`（默认 8）与 `ECHO_MAX_LOG_BYTES`（默认 32 MiB）兜底防跑飞。
@@ -31,9 +31,9 @@
 在沙箱（见上）内按序执行，每步产出写进模型条目的来源注释（见 model-layer.md）：
 
 1. **启动 schema**：沙箱 agent 目录放入 `models.yml` 后 `omp models --json`，确认配置通过 schema 校验、未知 compat key 无警告、模型挂在预期 provider 下。
-2. **静态面**：`omp models --json` 核对 limits / `input` / `cost` / `images` 列与声明一致。
+2. **静态面**：`omp models --json` 核对声明的 limits / `input` / `cost`；`omp models` 表格核对 `images` 列与预期传输行为（被 `stripImageInput` 剥图的模型显示 `no`——预期剥图就合格）。
 3. **真实调用**：`PI_REQ_DEBUG=1`（可配回显探针或真端点）跑一次带工具的对话，核对 wire body——model id、reasoning 参数、tools、stream 选项；对 `openai-completions` 端点可与探针日志逐字节交叉验证。
-4. **缓存实测**：`omp bench --cache` 跑冷/暖对（仅当声明/期望缓存），暖请求确认命中。
+4. **缓存实测**：`omp bench --cache` 跑冷/暖对（仅当声明/期望缓存），暖请求 `cache-read` > 0 即命中。
 5. **JSONL 断言**：检查沙箱 session JSONL——缓存命中值 > 0、`stopReason` 非 `error`、usage/cost 数值与费率对得上。
 
 每一步都按能力门控：没声明的项 N/A 跳过，声明了就必须过。

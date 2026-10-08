@@ -75,7 +75,6 @@ disable-model-invocation: true
 - `effortMap` 与 `compat.reasoningEffortMap` 各管什么、先后顺序 → 两层 effort 映射对照表。
 - 端点的 thinking 字段形状不对（`reasoning_effort` / `reasoning: {effort}` / `thinking` / `enable_thinking` / chat template）→ thinkingFormat 五方言判据表。
 - `:off` 到底发什么、`requiresEffort` 什么时候设 `false` → OFF 行为节。
-- 旧 `add-provider-models` thinking 文档的结论是否可用 → 作废断言清单。
 
 **完成判据**：`thinking.mode` 必填已给，`efforts` 最低档在前，映射层与方言层各归其位。
 

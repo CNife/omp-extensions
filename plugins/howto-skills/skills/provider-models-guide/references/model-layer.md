@@ -18,7 +18,7 @@
 | `maxContextWindow` | 放宽后的本地预算 | **只改 omp 本地预算（`/extended-context` 依据），不抬服务端限制**；两端都设时必须 ≥ `contextWindow`；设大前先确认端点真的接受更大的请求 |
 | `maxTokens` | 最大输出 | 自定义模型中提供时必须为正数 |
 | `cost` | 价格，见下节 | |
-| `promptCache` | 缓存生存期（18.3.5+） | `{ short: 秒, long: 秒 }`；见下文 |
+| `promptCache` | 缓存生存期（18.3.5+） | `{ short: 秒, long: 秒 }`；覆盖语义（显式写整体替换 catalog、`{}` 关 warming、只写 `short` 不继承 `long`）见 [provider-layer.md「上下文与压缩归位」](provider-layer.md) |
 | `thinking` | thinking 声明，见下节 | |
 
 最小配置（自定义模型）：
@@ -141,7 +141,7 @@ provider 层 TOML 含 `base_model = "<provider>/<model>"` 时，能力字段（a
 | `[[reasoning_options]]` 中 `type = "effort"` 的 `values` | provider 层 | `thinking.efforts`（升序、最低档在前） |
 | `[[reasoning_options]]` 的 `toggle` / `budget_tokens` 档、`[interleaved].field`（如 `reasoning_content`） | provider 层 | 不直接照抄：toggle/budget 档位与独立推理字段属 compat/thinking 层，见 thinking.md 与 compat 三规则（默认不写） |
 
-映射后仍按「compat 三规则」执行：默认不写 compat；只有验证取证发现端点怪癖才加最小的那个键；不用 compat 干其他层的事。
+映射后的 compat 取舍按 [provider-layer.md「compat 该不该用：三条规则」](provider-layer.md) 执行。
 
 ### 来源标注
 
