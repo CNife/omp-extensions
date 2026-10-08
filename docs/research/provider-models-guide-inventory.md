@@ -2,6 +2,8 @@
 
 调查对象：旧技能 `plugins/howto-skills/skills/add-provider-models/` 与 omp v18.3.0 当前文档/源码，并筛查 coding-agent、catalog 的 v18.0.8→v18.3.0 changelog。范围是配置自托管/兼容 API 的 provider 与 model；不是替主仓库改动。除共享 artifact 外未写文件。
 
+> **2026-10-08 基线刷新**：omp 已演进到 v18.8.3（对照源码 `/home/cnife/github/can1357@oh-my-pi`，tag v18.8.3）。下文前四个章节是 18.3.0 基线的原始盘点，保持不动；文末新增「18.3.0 → 18.8.3 变更重盘」与「#92 十一条结论重验」两章，后续写作工单应以刷新章为准、18.3.0 章为历史参照。
+
 ## 旧技能中需要改写或加限定的说法
 
 1. **固定配置路径不是唯一位置。** 旧技能把 `~/.omp/agent/models.yml` 当唯一目标（`SKILL.md:17,75-78`）。这是默认路径，不是硬编码的唯一位置；文档也列 `models.yaml` 与旧 `models.json` 迁移、程序化 `.json/.jsonc` 路径。源码由 `getAgentDir()` 推导默认目录，故 `PI_CODING_AGENT_DIR` 会重定位 agent 目录；具体写入前先定位运行实例的目录。证据：`omp://models.md §Config file location and legacy behavior`; `/home/cnife/github/can1357@oh-my-pi/packages/coding-agent/src/config/model-registry.ts:430`; `.../src/cli/help-extra.ts:66`。
@@ -50,3 +52,55 @@
 7. `PI_REQ_DEBUG=1` 是 raw wire 证据但带敏感 headers/body；限制到临时 cwd，结束后清理，禁止提交日志。旧 capture extension 不是 raw response/auth 记录器。`packages/ai/src/utils/request-debug.ts:48-70,80-97,208-220`; `plugins/howto-skills/extensions/capture.ts:21-28`。
 8. `/dump` 是交互 slash command，不是 `omp -p` 的执行方式；需要导出 session 时在支持 slash 路由的交互面使用。`omp://session-operations-export-share-fork-resume.md §/dump`; `omp://slash-command-internals.md §5 Routing and prompt-pipeline placement`。本轮已知实测：`omp -p "/dump"` 不会执行 slash command。
 9. 将 `local/<model>` 的 memory/small/speech role 说明与 `models.yml` endpoint 配置分开。`omp://local-models.md §Integration notes`。
+
+## 18.3.0 → 18.8.3 变更重盘（provider/model 配置相关）
+
+证据基线：omp 源码 tag `v18.8.3`（`/home/cnife/github/can1357@oh-my-pi`）；changelog 为 `packages/coding-agent/CHANGELOG.md` 与 `packages/catalog/CHANGELOG.md` 中 18.3.1 → 18.8.3 各版本条目（以 `[18.x.y]` 标题定位）。schema 层面用 `git diff v18.3.0 HEAD -- packages/coding-agent/src/config/models-config-schema-bundle.ts` 确认，未凭 changelog 猜测字段。
+
+### models.yml schema 字段变化（18.3.0 → 18.8.3 全部 diff 所得）
+
+- **model/modelOverrides 新增 `promptCache`（`short`/`long`，秒）**：显式 `promptCache` 整体替换 catalog 生存期而非合并；`promptCache: {}` 关闭该模型的 cache warming。v18.3.5 引入（catalog changelog `[18.3.5]`）。证据：`models-config-schema-bundle.ts:220-223,279-282`；`omp://models.md §Prompt cache lifetimes`。
+- **compat 新增 `statefulResponses`**：按 provider/model 显式选择/退出 Responses `previous_response_id` 链式，优先级为 call option > `PI_OPENAI_STATEFUL` > `compat.statefulResponses` > `compat.officialEndpoint`。v18.6.3 引入。证据：`models-config-schema-bundle.ts:74`；`omp://models.md §Compatibility and routing fields → statefulResponses`。
+- **compat 新增 `bedrockMessagesApi`**：为 `anthropic-messages` 模型启用 Bedrock `/anthropic` 路线行为（去 tool `strict`、适配 `metadata.user_id`、on-demand compaction）；从 Bedrock `/anthropic` baseUrl 自动检测，也可显式置 true/false。v18.4.4 引入。证据：`models-config-schema-bundle.ts:87`；`omp://models.md §Claude on Bedrock's Anthropic Messages API (/anthropic)`。
+- **compat 新增 `supportsSteering`**：Codex WebSocket `response.steer`（GPT-6 家族默认开）；拒绝该事件的代理显式置 false。证据：`models-config-schema-bundle.ts:85`；`omp://models.md §Compatibility and routing fields → supportsSteering`。
+- **新增 runner API / `kind` 维度**：model 与 modelOverrides 的 `api` 从纯 chat API 枚举扩展为可引用 runner API（`openai-images`、`openai-embeddings`、`openai-speech` 等），并新增 `kind` 字段（`chat`/`image`/`embedding`/`tts`/…）；显式 `kind` 必须是其 api 能服务的 kind，验证器新增 `checkKind`。v18.7.0「custom model-kind declarations for providers and extensions」落地。证据：`models-config-schema-bundle.ts:110-118,208-209,268-269`；`models-config.ts:92-121`；`omp://models.md §Allowed provider/model api values`。
+- **除上述外，`cost`/`input`/`thinking`/`discovery`/`auth`/`transport` 等既有字段枚举与必填性零变化**（diff 仅含上列新增与 `api` 重构）。`models[].cost` 仍四项全必填、`modelOverrides.cost` 仍全可选。
+
+### 验证与运行时行为变化
+
+- **未知 compat key 警告（18.8.1）**：provider/model/modelOverrides 的 `compat` 块中出现 schema 与运行时 wire 词表都不认识的键，产生非致命警告（交互启动通知、print/RPC/`omp models` stderr），配置照常加载，键被保留。运行时词表不按 provider 的 `api` 过滤。证据：`omp://models.md §Unknown compatibility keys`；`models-config.ts`（`getUnknownCompatKeys`）；coding-agent changelog `[18.8.1]`。
+- **模型恢复失败改为显式报错（18.6.3，Breaking）**：resume 时保存的 model 无法恢复，`createAgentSession`/`switchSession` 抛 `Could not restore model <provider/id>`（有 UI 且 `retry.modelFallback` 开时仍降级警告；无 UI host 可用 `allowSessionModelFallback: false` 退出降级）。打印/RPC 模式启动即报错退出。旧技能若写「resume 静默回退到默认模型」即过时。证据：coding-agent changelog `[18.6.3] Breaking Changes`。
+- **`supportsImageDetailOriginal` 默认值收紧（18.6.3）**：OpenAI/Azure/Codex 之外的自定义、本地、xAI、Copilot 等 Responses 端点默认 `false`，snapcompact 帧与 computer 截图改发 `detail: "auto"`；自定义 host 需 `compat.supportsImageDetailOriginal: true` 显式加入。证据：catalog changelog `[18.6.3]`；`omp://models.md §Compatibility and routing fields → supportsImageDetailOriginal`。
+- **DSML 工具调用在所有 host 解析（18.6.0）**：包括 llama.cpp/LM Studio/vLLM 本地端点、`models.yml` 自定义 provider 与不在旧名单上的网关；完整 `<｜DSML｜tool_calls>` 信封不再以纯文本出现。证据：catalog changelog `[18.6.0]`；schema 新增 `streamMarkupHealingPattern` 相邻语法的运行时词表支持（`omp://models.md §Compatibility and routing fields → streamMarkupHealingPattern`）。
+- **凭据/账号**：OAuth alias provider 的 login/logout/模型刷新修复（18.8.1）；task 代理可配置 account pool，只用指定 OAuth 账号、失败不回退（18.8.1）；`openai-codex` discovery 可走配置的兼容网关列模型且不向其发送 ChatGPT OAuth 凭据（18.5.1）；catalog 侧 openaiCodexModelManagerOptions.baseUrl 按 endpoint 隔离 discovery 缓存（catalog 18.5.1）。运行时注册模式新增 `oauthConfigured` 维度：`runtime-register` 下 `apiKey` 或已配置 OAuth 任一即可。证据：`models-config.ts:31,77-81`；changelog `[18.8.1]`、`[18.5.1]`。
+- **自动 thinking 选档变化（18.3.4，Breaking）**：`auto` thinking 按问题的开放程度（`solutionSpace`）逐轮选 effort，大体积机械工作不再抬高它。与新技能的 thinking 验证叙述相关：effort 不是静态属性，会随请求上下文变化。证据：coding-agent changelog `[18.3.4]`。
+- **服务层级（service tier）语义进入模型元数据（18.4.4 起）**：`Model.serviceTiers`、Codex Fast/priority 定价倍率（18.8.1 修正为 2.5×）、速度统计按 tier 分开（18.7.0/18.8.1）。验证 usage/cost 时注意 tier 标签。证据：catalog changelog `[18.4.4]`、`[18.8.1]`；`omp://provider-endpoint-constraints.md §3 Serialize request parameters by dialect → Service tier`。
+- **prompt cache warming（18.3.5）**：`providers.cacheWarming`（off/streaming/idle，默认 idle）在条目临期前重放请求保缓存；仅对声明了 `promptCache` 生存期的模型生效，自定义模型可用 `promptCache` 键加入。证据：coding-agent changelog `[18.3.5]`；`omp://models.md §Prompt cache lifetimes`。
+- **内建 roster/默认模型继续变动**：该区间新增/修订大量内建 provider（Command Code、Helmcode、Factory Droid、Snowflake Cortex、Cursor 账号化 roster、Antigravity 等），并多处修正在 Bedrock/Copilot/Devin 等兼容 host 上的采样参数默认。18.3.0 章「不要把当前 catalog 行为外推成自定义模型默认值」在 18.8.3 更甚。证据：catalog changelog `[18.4.3]`、`[18.4.5]`、`[18.6.3]`、`[18.5.1]` 各条。
+
+### 捕获/调试手段
+
+- `PI_REQ_DEBUG` 行为自 18.3.0 无代码变更（`git diff v18.3.0 HEAD -- packages/ai/src/utils/request-debug.ts` 为空）：`PI_REQ_DEBUG=1` 时 `transportFetch` 对每次实际 fetch 写 `rr-session-N.json` + `rr-session-N.res.log`；transport-fetch 顶注释明确 stamp 机制防止 auth 重试造成三层叠加 dump。证据：`packages/ai/src/utils/request-debug.ts:49-55,211-214`；`packages/ai/src/utils/transport-fetch.ts:16-18,37-42`。
+- capture.ts 摘要扩展仍在 omp-extensions 仓库，头部注释仍声明「拿不到 Authorization」「responseModel 恒为 null」。证据：omp-extensions `plugins/howto-skills/extensions/capture.ts:26-27`。
+
+## #92 十一条结论重验（至 18.8.3）
+
+| # | 结论 | 判定 | 18.8.3 证据 |
+|---|---|---|---|
+| 1 | thinking.mode 必填，5 个取值；effortMap 可挂 model.thinking，compat.reasoningEffortMap 是另一层；「efforts 是唯一入口」不成立 | **仍成立**，并有两点补充 | `models-config-schema-bundle.ts:122-124`（mode 枚举恰为 `effort/budget/google-level/anthropic-adaptive/anthropic-budget-effort`）、`:135`（mode 必填）、`:137-138`（model.thinking.effortMap）、`:45`（compat.reasoningEffortMap）。补充 ①：`efforts` 之外仍接受 legacy `levels`/`minLevel+maxLevel` 并规范化（`:128-145`，18.3.0 已有）；补充 ②：新增 `requiresEffort` 与 `:off` 语义（`requiresEffort: false` 仅在实测后端接受显式 reasoning-off 请求时设置，否则 `:off` 会被钳到最低 effort），`omp://models.md §Compatibility and routing fields → Reasoning/thinking` |
+| 2 | 四维验证按能力门控；HTTP 200 不是能力与 usage 语义证据 | **仍成立** | 文档立场未变：`omp://provider-endpoint-constraints.md §5`（strict tools 非普适、tool_choice 需按端点门控）、`§8`（usage/cost 语义按端点行为保留）；`omp://models.md §/model and omp models`（`images` 列报告传输实际发送内容，而非声明 input） |
+| 3 | --config overlay 不是全隔离（在全局与项目配置之后应用） | **仍成立** | `main.ts:250`（`--config` overlays 与 global config 同为可胜出层）、`:1830-1835`（Settings.init 以 `configFiles` 参数接收 overlay）；`omp://models.md §Model presets` 明确层级序：command line > `--config` file > project config > global config。18.6.3 起 `omp dry-balance` 也改为应用 overlay（changelog `[18.6.3]`）——overlay 是一层配置，不是隔离环境 |
+| 4 | wire model ID 可能被端点改写（Azure/OpenRouter），`payload.model == id` 不能作通用断言 | **仍成立**，改写面扩大 | `omp://provider-endpoint-constraints.md §2 Azure OpenAI`（deployment 名作为 request model、`AZURE_OPENAI_DEPLOYMENT_NAME_MAP`）、`§2 OpenRouter`（`:nitro`/`:floor` 等路由后缀）、`§3 → Model id`（ClinePass、Firepass、Fireworks 按推理 effort/计划改写 wire id；ClinePass 公共 id 去 `cline-pass/` 命名空间、Chat Completions 上 wire 时加回） |
+| 5 | 配置路径是默认值不是唯一位置 | **仍成立** | `omp://models.md §Config file location and legacy behavior`（默认 `models.yml`/`models.yaml` 双路径、named profiles `~/.omp/profiles/<name>/agent/`、`PI_CONFIG_DIR`、`PI_CODING_AGENT_DIR`、`models.json` 迁移）；`model-registry.ts:462`（`path.join(getAgentDir(), "models.yml")`）；`packages/utils/src/dirs.ts:5,452-481` |
+| 6 | 显式写 cost 四项必填，缺项使整份配置无效；平面费率覆盖；timeBased 不进 YAML；缺省可继承 catalog 价格 | **仍成立** | `models-config-schema-bundle.ts:214-219`（models[].cost 四项全必填）；`omp://models.md §Usage costs and time-based pricing`（显式 cost 是平面费率覆盖并禁用继承的时间计价；`timeBased` 只在 catalog KDL；缺省继承 bundled reference 行价格，通用 proxy discovery 保持本地未知零价）。细节确认：`modelOverrides.cost` 四项全可选（`:273-278`），「缺项无效」仅针对 `models[]` 定义 |
+| 7 | `input: [text, image]` 不保证图片送达（stripImageInput）；maxContextWindow 只改本地预算 | **仍成立** | `models-config-schema-bundle.ts:80,226,285`；`omp://models.md §Compatibility and routing fields → Image handling`（catalog class 规则独立于 input 声明设置 stripImageInput，per-model compat 深合并可置 false 反转；`pi-native` 传输不跑客户端剥除）；`§Provider-level fields`（maxContextWindow 只改本地预算，需验证端点接受大请求）。18.6.3 起非官方 Responses host 默认 `supportsImageDetailOriginal: false`，图片语义门控更细 |
+| 8 | auth: oauth 同样免 apiKey（以源码为准）；discovery 枚举含 apple-foundation-models | **语义变化：冲突已消除** | 两处「文档 vs schema 冲突」在 18.8.3 均已收敛：`omp://models.md §Allowed auth/discovery values` 现明确「`none` 和 `oauth` 免 custom-provider apiKey 要求，但 oauth 不创建凭据/登录流，只强制 OAuth 形状请求」；discovery 值清单现列出 `apple-foundation-models`（并注明它不是合法 `api` 值、Apple 传输在受支持 Mac 上隐式注册）。源码行为未变：`models-config.ts:77-81`（oauth 豁免 apiKey）、`:339`（`ProviderAuthSchema = "apiKey"|"none"|"oauth"`）、`models-config-schema-bundle.ts:316`。写作时不再需要「文档与源码冲突」的措辞，直接引文档即可 |
+| 9 | 18.0.8→18.3.0 演进项在 18.8.3 是否仍如此 | **仍成立（逐项）** | injectV1：`models-config-schema-bundle.ts:325-328` + `omp://models.md §Allowed auth/discovery values`。baseUrl 按 API scope：`omp://models.md §Provider-level fields`（scoped to the effective APIs of custom models that inherit it）。pi-native 覆盖自定义模型：`models-config-schema-bundle.ts:376` + 文档（provider-wide，"always applies the gateway URL provider-wide"）。凭据异步解析：`omp://models.md §Command-resolved secrets`（加载/检查 catalog 不执行，请求或在线探测时才解析，refresh 与 401 recovery 才失效缓存）。discovery 401/403 暴露：`model-registry.ts:1946-1952`（`discoveryAuthRejected = isDiscoveryAuthRejection(error)`，注释引用 issue #12281）。judge API（`typesafe`/`openrouter-decisions`）仍在 `ApiSchema`：`models-config-schema-bundle.ts:107-111` |
+| 10 | capture.ts 摘要抓包无 Authorization、responseModel 恒 null——PI_REQ_DEBUG 取代成立；PI_REQ_DEBUG 行为未变 | **仍成立，行为未变** | capture.ts 头注释原样保留（omp-extensions `plugins/howto-skills/extensions/capture.ts:26-27`）；`git diff v18.3.0 HEAD -- packages/ai/src/utils/request-debug.ts` 为空：仍是 `PI_REQ_DEBUG=1`（`:49-55`）、`rr-session-N.json` + `rr-session-N.res.log`（`:211-214`）。auth 重试语义补充：每次实际 HTTP 尝试各得一份 dump，transport-fetch 的 stamp 保证不三层叠加（`transport-fetch.ts:16-18`） |
+| 11 | `local/<model>` 的 role 与 models.yml 是不同配置面 | **仍成立** | `omp://local-models.md` 开头（`modelRoles.tiny/memory/speech/dictation/judge` + `retry.fallbackChains`，catalog 条目在 `packages/catalog/src/compat/rules/providers/local.kdl`）与 `§Integration notes`；`omp://models.md §Role aliases and settings`（"Configure them under `modelRoles` in `config.yml`, not in `models.yml`"）。18.7.0 起新增 runner `kind` 维度后，local 侧还多了 `omp models --kind tiny/tts/stt` 观察面 |
+
+### 对写作工单的净影响
+
+- **直接要改写**：#8 的「文档/schema 冲突」表述删除，改为直接引用已收敛的文档语义。
+- **需要新增覆盖**：`promptCache`（18.3.5）、`statefulResponses`（18.6.3）、`bedrockMessagesApi`（18.4.4）、runner `kind`（18.7.0）、未知 compat key 警告（18.8.1）、`supportsImageDetailOriginal` 默认值收紧（18.6.3）、resume 模型恢复硬错误（18.6.3）。
+- **其余九条**原文可以沿用，行号证据按上表更新。
