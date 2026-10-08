@@ -134,7 +134,7 @@ provider 层 TOML 含 `base_model = "<provider>/<model>"` 时，能力字段（a
 
 | models.dev 字段 | 所在货架 | 写入 models.yml |
 |---|---|---|
-| `[cost]` 的 `input` / `output` / `cache_read` / `cache_write` | provider 层 | `cost.input` / `output` / `cacheRead` / `cacheWrite`（注意下划线→驼峰；四项必填） |
+| `[cost]` 的 `input` / `output` / `cache_read` / `cache_write` | provider 层 | `cost.input` / `output` / `cacheRead` / `cacheWrite`（注意下划线→驼峰；四项必填仅限 `models[]`，`modelOverrides` 按需部分覆盖，见 cost 节） |
 | `[limit]` 的 `context` / `output` | canonical | `contextWindow` / `maxTokens` |
 | `attachment` + `[modalities]` | canonical | `input: [text, image]`（有 image 模态才加 image） |
 | `reasoning` | canonical | `reasoning: true` |
