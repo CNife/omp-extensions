@@ -3,7 +3,7 @@
  *
  * 成员清单格式：裸 `provider/id` selector（0.2.0 起去掉 `^` 前缀）。
  * `^` 只在 /ask-consultants 组装用户消息时拼接，配置与 /consultants
- * 的读写一律用裸格式——伪名注册按 `provider/id` 精确匹配 selector，
+ * 的读写一律用裸格式——代号注册按 `provider/id` 精确匹配 selector，
  * effort 后缀（如 `:high`）从来不属于 selector，不因去 `^` 而引入。
  */
 
