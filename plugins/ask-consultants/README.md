@@ -6,7 +6,7 @@
 
 - **命令 `/consultants`**：交互式选择成员（与 `/inject-skills` 同款设置列表）。候选为当前可用模型（`ctx.modelRegistry.getAvailable()`），`↑↓` 导航、字符模糊筛选、`Space`/`Enter` 切换、`Esc` 关闭；切换即时写入成员配置。配置里登记过、但当前会话不可用的成员以 `provider/id (not available)` 行保留在列表里，切回 `disabled` 即从配置移除。
 - **命令 `/ask-consultants <评审对象>`**：读取成员清单，把成员组装成 `^provider/id` 模型标签投递。OMP 的代号机制（user-tagged model agents）将标签一步注册为会话级代号 m1、m2、…——代号对 task 工具可见、走隐藏 notice 通道、不破坏提示词缓存。注册顺序 = 配置里的书写顺序。
-- **技能 `ask-consultants`**：把同一 brief（含顾问立场）并行派发给每个成员，成员互不可见、独立出报告，最后主模型以主位者身份汇总：给出权衡后的最终结论与成员分歧。
+- **技能 `ask-consultants`**：把同一份任务书（含顾问立场）并行派发给每个成员，成员互不可见、独立出报告，最后主模型以主位者身份汇总：给出权衡后的最终结论与成员分歧。
 
 成员注册只能由用户触发（synthetic prompt 跳过代号注册），模型的职责是派发与汇总——准入权在人，使用权在模型。
 
