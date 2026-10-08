@@ -230,7 +230,7 @@ export default function activate(pi: PiLike): void {
 			const target = args?.trim() ? args.trim() : "（待补充评审对象——请先运行 /ask-consultants <评审对象>）";
 			await pi.sendUserMessage(
 				`${tags.map((tag) => `^${tag}`).join(" ")}\n\n` +
-					`以上 \`^\` 标记注册的代号（m1、m2、…）是本会话的顾问团成员。` +
+					`以上模型标签对应的代号（m1、m2、…）是本会话的顾问团成员。` +
 					`请调用 ask-consultants 技能，对下面的评审对象执行顾问团评审：\n\n${target}`,
 			);
 		},
