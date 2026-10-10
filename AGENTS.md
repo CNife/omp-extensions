@@ -47,4 +47,4 @@ Issues 托管在 GitHub Issues（通过 `gh` CLI 操作）。详见 `docs/agents
 
 ### Domain docs
 
-单上下文布局：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+单上下文布局：根目录 `GLOSSARY.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
