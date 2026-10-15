@@ -45,7 +45,7 @@ Esc 取消则什么都不发生，只有一条可选消息时不弹列表。宿�
 - `/pna` → `plannotator annotate <target> --json`（解析决策 JSON 提取 `feedback`；文件夹自动
   扫描，HTML 不传 `--markdown` 即原始渲染，URL 直接抓取）
 - `/pnl` → 先用 `ctx.ui.select` 列出当前会话分支上最近 25 条非空 assistant 消息（选项
-  `倒数第 N 条 · 首行摘要` + 字符数），选中项内容经 stdin 传给
+  `#N · 首行摘要` + 字符数，#1 = 最新一条），选中项内容经 stdin 传给
   `plannotator annotate-last --stdin --json`（无临时文件）
 
 进程非阻塞：命令立即返回，浏览器关闭后异步将反馈发回 agent。

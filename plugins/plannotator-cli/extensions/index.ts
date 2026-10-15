@@ -329,7 +329,7 @@ function normalizeUserPath(raw: string): string {
 /** /pnl 选择器最多列出多少条消息（与 plannotator 官方 RECENT_MESSAGES_LIMIT 对齐）。 */
 const PNL_MESSAGE_LIMIT = 25;
 
-const PNL_SELECTOR_TITLE = "Select an assistant message to annotate";
+const PNL_SELECTOR_TITLE = "Select an assistant message to annotate (#1 = latest)";
 
 /** 摘要宽度（字符数），超出即截断加省略号。 */
 const SUMMARY_WIDTH = 40;
@@ -405,11 +405,11 @@ function summarizeMessage(text: string): string {
   return truncateSummary(fallback);
 }
 
-/** 选择器选项：label 以「倒数第 N 条」序号前缀保证唯一（宿主回传值只有 label），
+/** 选择器选项：label 以 `#N` 序号前缀保证唯一（宿主回传值只有 label），
  *  description 给出该消息的体量（按码点计的字符数）。 */
 function messageOption(text: string, ordinal: number): SelectOption {
   return {
-    label: `倒数第 ${ordinal} 条 · ${summarizeMessage(text)}`,
+    label: `#${ordinal} · ${summarizeMessage(text)}`,
     description: `${Array.from(text).length} 字符`,
   };
 }
@@ -490,7 +490,7 @@ export default function plannotatorCli(pi: PiLike): void {
       ctx.ui.notify(
         ordinal === 1
           ? "Opening annotation UI for last message..."
-          : `Opening annotation UI for assistant message ${ordinal} back...`,
+          : `Opening annotation UI for assistant message #${ordinal}...`,
         "info",
       );
       // 消息内容经 stdin 传入（--stdin），无临时文件生命周期。
