@@ -468,11 +468,11 @@ test("/pnl 多条消息: 选项倒序 + label 摘要 + 字符数 + initialIndex 
 
 	await waitFor(() => ui.selects.length === 1);
 	const call = ui.selects[0];
-	equal(call.title, "Select an assistant message to annotate");
+	equal(call.title, "Select an assistant message to annotate (#1 = latest)");
 	deepStrictEqual(call.dialogOptions, { initialIndex: 0 });
 	deepStrictEqual(call.options, [
-		{ label: "倒数第 1 条 · 短回复", description: "3 字符" },
-		{ label: "倒数第 2 条 · 设计说明", description: "10 字符" },
+		{ label: "#1 · 短回复", description: "3 字符" },
+		{ label: "#2 · 设计说明", description: "10 字符" },
 	]);
 
 	// 默认光标在最新一条：回车（pick 默认回传 options[0]）即旧行为
@@ -499,8 +499,8 @@ test("/pnl 最多 25 条: 只列最近的 25 条，更早的不出现", async ()
 	await waitFor(() => ui.selects.length === 1);
 	const options = ui.selects[0].options;
 	equal(options.length, 25);
-	equal(options[0].label, "倒数第 1 条 · m30");
-	equal(options[24].label, "倒数第 25 条 · m6");
+	equal(options[0].label, "#1 · m30");
+	equal(options[24].label, "#25 · m6");
 	ok(!options.some((o) => o.label.includes("oldest")), "第 26 条起不应出现在列表里");
 });
 
@@ -522,10 +522,10 @@ test("/pnl 摘要: 剥离 markdown 噪声并截断到 40 字符", async () => {
 	deepStrictEqual(
 		ui.selects[0].options.map((o) => o.label),
 		[
-			`倒数第 1 条 · ${"x".repeat(40)}…`,
-			`倒数第 2 条 · ${"长".repeat(40)}…`,
-			"倒数第 3 条 · 加粗标题 与 code",
-			"倒数第 4 条 · 普通",
+			`#1 · ${"x".repeat(40)}…`,
+			`#2 · ${"长".repeat(40)}…`,
+			"#3 · 加粗标题 与 code",
+			"#4 · 普通",
 		],
 	);
 });
@@ -541,7 +541,7 @@ test("/pnl 摘要雷同: label 靠序号前缀保持唯一", async () => {
 
 	await waitFor(() => ui.selects.length === 1);
 	const labels = ui.selects[0].options.map((o) => o.label);
-	deepStrictEqual(labels, ["倒数第 1 条 · 同样的文本", "倒数第 2 条 · 同样的文本"]);
+	deepStrictEqual(labels, ["#1 · 同样的文本", "#2 · 同样的文本"]);
 	equal(new Set(labels).size, labels.length, "label 必须唯一（宿主只回传 label）");
 });
 
@@ -562,9 +562,9 @@ test("/pnl 摘要: 词边界外的下划线是标识符不是强调，波浪号�
 	deepStrictEqual(
 		ui.selects[0].options.map((o) => o.label),
 		[
-			"倒数第 1 条 · a_b 与 强调 混排",
-			"倒数第 2 条 · 改 api_key 与 max_retries__x",
-			"倒数第 3 条 · ~/x 与 两者 都在",
+			"#1 · a_b 与 强调 混排",
+			"#2 · 改 api_key 与 max_retries__x",
+			"#3 · ~/x 与 两者 都在",
 		],
 	);
 });
@@ -583,7 +583,7 @@ test("/pnl 摘要截断按码点: emoji 不被切开成乱码", async () => {
 
 	await waitFor(() => ui.selects.length === 1);
 	const options = ui.selects[0].options;
-	equal(options[0].label, `倒数第 1 条 · ${"x".repeat(39)}🎯…`);
+	equal(options[0].label, `#1 · ${"x".repeat(39)}🎯…`);
 	ok(!options[0].label.includes("�"), "不应出现截断产生的替代字符");
 	equal(options[0].description, "46 字符", "字符数按码点计（39 + emoji + 6）");
 });
@@ -607,11 +607,11 @@ test("/pnl 列表只含非空助手消息（排除 user 与空 assistant）", as
 	await waitFor(() => ui.selects.length === 1);
 	deepStrictEqual(
 		ui.selects[0].options.map((o) => o.label),
-		["倒数第 1 条 · 第二个回复", "倒数第 2 条 · 第一个回复"],
+		["#1 · 第二个回复", "#2 · 第一个回复"],
 	);
 });
 
-test("/pnl 选中倒数第 3 条: stdin 为该条文本 + 前缀带序号 + 通知带序号", async () => {
+test("/pnl 选中 #3: stdin 为该条文本 + 前缀带序号 + 通知带序号", async () => {
 	const { scratch, stubLog } = setupScratch();
 	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
 	process.env.PLANNO_STUB_STDOUT = '{"decision":"annotated","feedback":"改这里"}';
@@ -632,7 +632,7 @@ test("/pnl 选中倒数第 3 条: stdin 为该条文本 + 前缀带序号 + 通�
 	assertStubLog(readFileSync(stubLog, "utf8"), "arg=annotate-last", "arg=--stdin", "arg=--json");
 	ok(
 		notified.some(
-			(n) => n.msg === "Opening annotation UI for assistant message 3 back..." && n.type === "info",
+			(n) => n.msg === "Opening annotation UI for assistant message #3..." && n.type === "info",
 		),
 		"非最新一条的通知应带序号",
 	);
