@@ -23,7 +23,7 @@ Single-context repo (most repos):
 └── src/
 ```
 
-Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
+Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
 
 ```
 /
