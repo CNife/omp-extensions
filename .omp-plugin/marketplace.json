@@ -17,31 +17,31 @@
       "name": "nmem",
       "description": "nmem 会话自动同步 + opt-in 引导注入，取代官方 nowledge-mem-omp 插件",
       "source": "./plugins/nmem",
-      "version": "0.2.1"
+      "version": "0.2.2"
     },
     {
       "name": "skills-injection",
       "description": "交互式控制哪些技能被注入到系统提示词，持久化配置",
       "source": "./plugins/skills-injection",
-      "version": "0.1.2"
+      "version": "0.1.3"
     },
     {
       "name": "cache-miss-notices",
       "description": "显著的 prompt-cache miss 即时通知，移植自 pi 的 showCacheMissNotices",
       "source": "./plugins/cache-miss-notices",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "name": "plannotator-cli",
       "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
       "source": "./plugins/plannotator-cli",
-      "version": "0.2.1"
+      "version": "0.2.2"
     },
     {
       "name": "ask-consultants",
       "description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
       "source": "./plugins/ask-consultants",
-      "version": "0.2.3"
+      "version": "0.2.4"
     }
   ]
 }

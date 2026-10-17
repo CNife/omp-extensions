@@ -34,12 +34,27 @@ interface UsageSpec {
 	inputPrice?: number;
 	cacheReadPrice?: number;
 }
+/** 测试侧的完整 usage 形状：比插件声明的 UsageLike 宽（带 output/total）。
+ *  经变量传递（而非字面量）给 detectCacheMiss，避免触发 excess property check。 */
+interface TestAssistant {
+	role: "assistant";
+	provider: string;
+	model: string;
+	timestamp: number;
+	usage: {
+		input: number;
+		cacheRead: number;
+		cacheWrite: number;
+		cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+	};
+}
+
 function assistant(
 	provider: string,
 	model: string,
 	timestamp: number,
 	spec: UsageSpec,
-): AssistantLike & { role: "assistant" } {
+): TestAssistant {
 	const cw = spec.cacheWrite ?? 0;
 	const inputPrice = spec.inputPrice ?? 1;
 	const cacheReadPrice = spec.cacheReadPrice ?? 0.1;

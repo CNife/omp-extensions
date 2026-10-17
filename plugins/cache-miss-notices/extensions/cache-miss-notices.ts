@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cache-miss-notices — 显著的 prompt-cache miss 即时通知。
  *
@@ -52,7 +51,7 @@ interface UsageLike {
   cost: { input: number; cacheRead: number; cacheWrite: number };
 }
 
-interface AssistantLike {
+export interface AssistantLike {
   provider: string;
   model: string;
   timestamp: number;
@@ -173,10 +172,22 @@ export function formatNotice(miss: CacheMiss): string {
 // Extension entry
 // ============================================================================
 
+/** message_end 事件里本插件读到的字段。 */
+interface MessageEndEvent {
+  message: { role: string } & Partial<AssistantLike>;
+}
+
+/** 本插件用到的会话上下文字段（宿主 API 未打进本仓类型检查，故在此声明最小面）。 */
+interface MessageEndContext {
+  model?: { cost?: { cacheRead?: number } };
+  sessionManager: { getEntries(): readonly { type: string; message?: unknown }[] };
+  ui: { notify(text: string, level: string): void };
+}
+
 export default function cacheMissNotices(pi: any) {
   pi.setLabel("Cache Miss Notices");
 
-  pi.on("message_end", async (event, ctx) => {
+  pi.on("message_end", async (event: MessageEndEvent, ctx: MessageEndContext) => {
     const message = event.message;
     if (message.role !== "assistant") return;
 

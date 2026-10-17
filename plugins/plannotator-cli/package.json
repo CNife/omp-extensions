@@ -1,6 +1,6 @@
 {
   "name": "plannotator-cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令",
   "private": true,
   "license": "MIT",
@@ -15,9 +15,5 @@
   },
   "omp": {
     "extensions": ["./extensions/index.ts"]
-  },
-  "devDependencies": {
-    "@types/bun": "^1.3.14",
-    "typescript": "^7.0.2"
   }
 }

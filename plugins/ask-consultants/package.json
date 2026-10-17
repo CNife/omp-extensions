@@ -1,6 +1,6 @@
 {
   "name": "ask-consultants",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "多模型顾问团：/consultants 选择成员、/ask-consultants 一步注册成员代号，技能并行派发独立评审，主模型权衡分歧给出最终结论",
   "private": true,
   "license": "MIT",

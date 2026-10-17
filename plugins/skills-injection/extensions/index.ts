@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * skills-injection - OMP extension
  *
@@ -188,7 +187,6 @@ export default function (pi: any) {
 					() => {
 						done(undefined);
 					},
-					{ enableSearch: true },
 				);
 
 				container.addChild(settingsList);

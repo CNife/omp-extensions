@@ -1,0 +1,9 @@
+#!/bin/sh
+# 提交前跑与 CI 相同的机械检查；载荷变更的版本递增按暂存内容比对。
+# 安装：git config core.hooksPath .githooks（bun install 的 prepare 脚本会自动设）。
+# 绕过：git commit --no-verify（绕过后 CI 仍会拦）。
+if [ ! -d node_modules ]; then
+	echo "pre-commit: 缺少依赖，先运行 bun install（或用 git commit --no-verify 跳过）" >&2
+	exit 1
+fi
+exec bun run check:staged

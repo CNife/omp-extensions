@@ -8,6 +8,8 @@ CNife 的 OMP (Oh My Pi) agent 扩展集合，以 [marketplace](https://github.c
 omp-extensions/
   .omp-plugin/
     marketplace.json          # 插件目录清单
+  .githooks/pre-commit        # check:staged
+  scripts/                    # check.ts（机械检查）、smoke.ts（扩展加载冒烟）
   plugins/
     nmem/                    # 每个插件一个自包含子目录
       package.json            # omp.extensions + omp.skills 声明
@@ -17,6 +19,7 @@ omp-extensions/
   docs/agents/                # 工程技能配置（issue 追踪器、领域文档）
     issue-tracker.md
     domain.md
+  docs/adr/
   AGENTS.md
   README.md
   LICENSE
@@ -25,10 +28,25 @@ omp-extensions/
 ## 添加插件
 
 1. 在 `plugins/` 下创建子目录，包含 `package.json`（声明 `omp.extensions` 和 `omp.skills`）、`extensions/`、`skills/` 等。
-2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。条目需含 `version` 字段（与插件 `package.json` 的 `version` 一致）；每次更新插件代码时同步递增这两个 version，否则 `omp plugin upgrade`（不带参数）检测不到更新。
+2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。条目需含 `version` 字段（与插件 `package.json` 的 `version` 一致）；**载荷变更**时同步严格递增这两个 version，否则 `omp plugin upgrade`（不带参数）检测不到更新。`bun scripts/check.ts` 会校验这两点。
 3. 安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`
 
-> 本项目的插件通过 OMP marketplace 直接安装，**不要用 `omp plugin link`**。
+> 安装副本由 marketplace 分发，不要用 `omp plugin link` / `omp plugin install <本机路径>`（后者同样是链接）把安装副本接到工作树上。本地开发用下方「验证」里的 `-e` 冒烟。
+
+## 验证
+
+```bash
+bun install        # 首次：装根 devDeps，并自动把 core.hooksPath 设成 .githooks
+bun run check      # bun test + tsc --noEmit + 清单/版本/技能 frontmatter 检查
+bun run smoke      # 逐个扩展入口用 `omp --no-extensions -e <entry>` 真加载
+```
+
+- pre-commit hook 跑 `check:staged`（版本递增按暂存内容比对）；CI 跑同一个 `check`，并对 PR 额外比对 base。
+- 判定冒烟结果看 **stderr 无 `Failed to load extension`** 且命令出现在 `available_commands_update` 里——**omp 加载失败的退出码仍是 0**。为什么不用 `--plugin-dir`（它对插件目录静默不加载）见 [ADR 0005](docs/adr/0005-extension-smoke-load.md)。
+
+## 修改技能时改哪里
+
+`skill://<name>` 解析到的是**安装副本**（`~/.omp/plugins/cache/plugins/omp-extensions___<name>___<version>/`），改它不会进仓、也不会被下次安装保留。改源码一律改 `plugins/<name>/skills/`，改完递增载荷 version 并重装。
 
 ## 技能 frontmatter
 

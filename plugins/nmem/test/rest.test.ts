@@ -22,6 +22,8 @@ interface FetchCall {
 	init: RequestInit;
 }
 
+type GlobalFetch = typeof globalThis.fetch;
+
 /** 依次返回给定结果的 fake fetch（每次调用消耗一个；耗尽后重复最后一个）。 */
 function scriptedFetch(outcomes: Array<() => Response>) {
 	const calls: FetchCall[] = [];
@@ -29,7 +31,7 @@ function scriptedFetch(outcomes: Array<() => Response>) {
 		calls.push({ url: String(url), init });
 		return outcomes[Math.min(calls.length - 1, outcomes.length - 1)]();
 	};
-	return { fetch: fetch as unknown as typeof fetch, calls };
+	return { fetch: fetch as unknown as GlobalFetch, calls };
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -51,7 +53,7 @@ function rejectingFetch(error: unknown) {
 		calls.push({ url: String(url), init });
 		throw error;
 	};
-	return { fetch: fetch as unknown as typeof fetch, calls };
+	return { fetch: fetch as unknown as GlobalFetch, calls };
 }
 
 /** 挂起直到请求被 abort 的 fake fetch（超时模拟，Promise 永不 resolve）。 */
@@ -65,7 +67,7 @@ function hangingFetch() {
 			else init.signal?.addEventListener("abort", onAbort, { once: true });
 		});
 	};
-	return { fetch: fetch as unknown as typeof fetch, calls };
+	return { fetch: fetch as unknown as GlobalFetch, calls };
 }
 
 interface FakeTimerHandle {
@@ -193,9 +195,9 @@ test("nmemRequest: options.fetch 注入优先生效，全局 fetch 不被调用"
 	const restoreEnv = useFakeConfig();
 	const scripted = scriptedFetch([() => jsonResponse(200, { ping: "pong" })]);
 	const originalFetch = globalThis.fetch;
-	globalThis.fetch = () => {
+	globalThis.fetch = (() => {
 		throw new Error("global fetch must not be called when options.fetch is injected");
-	};
+	}) as unknown as GlobalFetch;
 	try {
 		const data = await nmemRequest("GET", "/ping", undefined, {
 			fetch: scripted.fetch,
@@ -256,7 +258,7 @@ test("nmemRequest: timeout 重试后成功", async () => {
 			return jsonResponse(200, { recovered: true });
 		};
 		const data = await nmemRequest("GET", "/threads", undefined, {
-			fetch: fakeFetch as unknown as typeof fetch,
+			fetch: fakeFetch as unknown as GlobalFetch,
 		});
 		deepStrictEqual(data, { recovered: true });
 		strictEqual(calls.length, 2);
@@ -273,7 +275,7 @@ test("nmemRequest: backend_unreachable 重试后成功", async () => {
 			return jsonResponse(200, { done: 1 });
 		};
 		const data = await nmemRequest("GET", "/threads", undefined, {
-			fetch: fakeFetch as unknown as typeof fetch,
+			fetch: fakeFetch as unknown as GlobalFetch,
 		});
 		deepStrictEqual(data, { done: 1 });
 		strictEqual(attempt, 2);
@@ -432,7 +434,7 @@ test("nmemRequest: 响应体为空时回退 HTTP <status>", async () => {
 	await withFixtures(async () => {
 		const fetch = async () => new Response("", { status: 500 });
 		const threw = await requestExpectingError("GET", "/threads", undefined, {
-			fetch: fetch as unknown as typeof fetch,
+			fetch: fetch as unknown as GlobalFetch,
 		});
 		strictEqual(threw.message, "[server_error] HTTP 500");
 	});
@@ -442,7 +444,7 @@ test("nmemRequest: 非法 JSON 响应体原样作为详情", async () => {
 	await withFixtures(async () => {
 		const fetch = async () => new Response("gateway exploded", { status: 502 });
 		const threw = await requestExpectingError("GET", "/threads", undefined, {
-			fetch: fetch as unknown as typeof fetch,
+			fetch: fetch as unknown as GlobalFetch,
 		});
 		strictEqual(threw.message, "[server_error] gateway exploded");
 	});

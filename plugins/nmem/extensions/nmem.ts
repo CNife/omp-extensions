@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * nmem — OMP extension 薄入口：何时同步。
  *

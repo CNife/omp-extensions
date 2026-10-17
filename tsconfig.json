@@ -12,5 +12,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["extensions/**/*.ts", "test/**/*.ts"]
+  "include": ["plugins/*/extensions/**/*.ts", "plugins/*/test/**/*.ts", "scripts/**/*.ts"]
 }

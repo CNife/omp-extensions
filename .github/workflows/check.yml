@@ -1,0 +1,28 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request: # 不限 base 分支：栈式 PR 也要跑
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 载荷版本检查要比对 merge-base
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test and typecheck
+        run: bun run check
+
+      - name: Payload versions against base
+        if: github.event_name == 'pull_request'
+        run: bun scripts/check.ts --base "origin/${{ github.base_ref }}"

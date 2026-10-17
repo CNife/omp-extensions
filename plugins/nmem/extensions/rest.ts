@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * nmem REST 传输 — config 解析 + 带 retry/backoff/超时的 fetch 基座。
  *

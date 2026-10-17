@@ -171,7 +171,6 @@ export default function activate(pi: PiLike): void {
 					() => {
 						done(undefined);
 					},
-					{ enableSearch: true },
 				);
 
 				container.addChild(settingsList);

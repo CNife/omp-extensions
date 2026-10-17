@@ -74,7 +74,7 @@ non-injectable (K): z
 
 1. **`before_agent_start` 拦截**：读取配置，从 `event.systemPrompt`（omp 为 `string[]`）中匹配 `<skills>` 块，删除被排除技能对应的 `- name: description` 行。每 turn 读配置文件，所以下一条消息即生效。无需 `formatSkillsForPrompt`：omp 的技能段已是纯文本列表，按名删除即可。
 
-2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，`enableSearch` 做名称模糊筛选。切换即时写配置。行集 = 已加载非 hide 技能 ∪ 配置里登记但未加载的名字（`buildMenuItems`，字母序混排；后者 label 加 `(not installed)`）。
+2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，名称模糊筛选沿用宿主 `SettingsListOptions.typeToSearch`（默认开）。切换即时写配置。行集 = 已加载非 hide 技能 ∪ 配置里登记但未加载的名字（`buildMenuItems`，字母序混排；后者 label 加 `(not installed)`）。
 
 3. **`session_start` 通知**（与命令共用 `resolveSkills`）：
    - 技能名单与 `hide` 标志直接取自 omp 导出的 `loadSkills({ cwd })`（omp 已从 frontmatter 归一化 `disable-model-invocation` -> `Skill.hide`，无需再读文件兜底）
