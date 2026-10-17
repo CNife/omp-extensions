@@ -3,8 +3,7 @@ name: Check
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  pull_request: # 不限 base 分支：栈式 PR 也要跑
 
 jobs:
   check:
