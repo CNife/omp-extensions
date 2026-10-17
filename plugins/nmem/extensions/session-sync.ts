@@ -57,8 +57,11 @@ interface SyncState {
   created?: boolean;
   lastSyncedCount?: number;
   lastError?: string;
-  inFlight?: Promise<void>;
-  pending?: boolean;
+  /** Serializes rounds for one thread: at most one request chain at a time. */
+  draining?: Promise<void>;
+  /** Newest snapshot waiting for the chain to drain. Not a flag: a stale snapshot
+   *  must never be replayed in place of a fresher one. */
+  queued?: SyncPayload;
   timer?: unknown;
 }
 
@@ -365,31 +368,36 @@ async function flushOnce(
   state.lastError = undefined;
 }
 
+/** One request chain per thread. Callers enqueue their snapshot and await the whole
+ *  drain, so a caller that needs the write to land (shutdown) sees it land. */
 async function flushPayload(
   ctx: any,
   payload: SyncPayload,
   options?: FlushOptions,
 ): Promise<void> {
-  const key = payload.threadId;
-  const state = syncStates.get(key) || {};
-  syncStates.set(key, state);
-  if (state.inFlight) {
-    state.pending = true;
-    await state.inFlight;
-    return;
-  }
-  do {
-    state.pending = false;
-    state.inFlight = flushOnce(ctx, payload, state, options).finally(() => {
-      state.inFlight = undefined;
-    });
-    await state.inFlight;
-  } while (state.pending);
+  const state = syncStates.get(payload.threadId) || {};
+  syncStates.set(payload.threadId, state);
+  state.queued = payload;
+  state.draining ??= drain(ctx, state, options);
+  await state.draining;
 }
 
-/** Cancel a pending debounce for this thread: a rigid flush supersedes it. Leaving
- *  it armed would fire mid-flush, set `pending`, and make flushPayload run another
- *  full round — doubling the shutdown path's worst case past the host's 2s cap. */
+async function drain(ctx: any, state: SyncState, options?: FlushOptions): Promise<void> {
+  try {
+    while (state.queued) {
+      const next = state.queued;
+      state.queued = undefined;
+      await flushOnce(ctx, next, state, options);
+    }
+  } finally {
+    state.draining = undefined;
+  }
+}
+
+/** Cancel a pending debounce for this thread: a rigid flush supersedes it. The
+ *  debounce snapshots at fire time, so cancelling it drops no entries — the rigid
+ *  flush builds an equal-or-wider snapshot from the same branch. Leaving it armed
+ *  would instead add a round to the shutdown path, past the host's 2s cap. */
 function cancelScheduledFlush(ctx: any, state: SyncState | undefined): void {
   if (state?.timer === undefined) return;
   ctx.clearTimer(state.timer);
@@ -403,16 +411,18 @@ export async function flush(ctx: any, reason: string, options?: FlushOptions): P
   await flushPayload(ctx, payload, options);
 }
 
-/** Debounced flush — uses ctx.setTimeout for OMP isolation safety. */
+/** Debounced flush — uses ctx.setTimeout for OMP isolation safety.
+ *  The snapshot is taken when the timer fires, not when it is scheduled: a payload
+ *  built 750ms early can miss entries appended in the meantime. */
 export function scheduleFlush(ctx: any, reason: string): void {
-  const payload = buildSyncPayload(ctx, reason);
-  if (!payload) return;
-  const key = payload.threadId;
-  const state = syncStates.get(key) || {};
-  syncStates.set(key, state);
+  const threadId = threadIdFor(ctx);
+  const state = syncStates.get(threadId) || {};
+  syncStates.set(threadId, state);
   if (state.timer) ctx.clearTimer(state.timer);
   state.timer = ctx.setTimeout(() => {
     state.timer = undefined;
+    const payload = buildSyncPayload(ctx, reason);
+    if (!payload) return;
     void flushPayload(ctx, payload).catch(() => {});
   }, FLUSH_DELAY_MS);
 }
