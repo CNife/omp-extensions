@@ -14,6 +14,14 @@ _Avoid_: 纯技能插件、skills-only plugin
 声明了 `omp.extensions` 的插件，扩展由 omp 在启动时自动注册。
 _Avoid_: 代码插件
 
+**载荷**:
+`plugins/<name>/` 下任何被 git 跟踪的文件——安装副本会分发的全部内容：扩展入口、技能文本、README、测试。载荷变更必须递增版本。
+_Avoid_: 插件代码（漏掉技能文本与 README，历史上漏 bump 的提交全是技能文本）、安装包（像是构建产物，实际是仓库目录的直接拷贝）
+
+**安装副本**:
+omp 安装插件时拷到 `~/.omp/plugins/cache/plugins/<marketplace>___<name>___<version>/` 的那一份，路径带版本号；`skill://<name>` 与扩展加载都指向它。
+_Avoid_: 缓存（它不参与淘汰，也不是可丢弃的中间产物）、本地插件（与工作树里的源码混淆）
+
 **退役**:
 插件的终态：从 marketplace 摘除注册并删除插件目录，代码只留在 git 历史与 ADR 里。
 _Avoid_: 下架（可能仍可安装）、废弃 / deprecated（可能仍在仓里）、删除（只说了动作，没说明注册面一起摘）
