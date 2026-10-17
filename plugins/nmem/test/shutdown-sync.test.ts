@@ -436,3 +436,39 @@ test("agent_end 防抖: 到点时按最新会话落盘，窗口内新消息不�
 		p.restore();
 	}
 });
+
+test("session_shutdown: 排队的一轮用自己的预算，不继承前一轮的默认值", async () => {
+	// agent_end 的同步已在飞（默认 8s + 重试），此时退出。补发的那一轮必须仍按
+	// 800ms / 不重试跑：否则它继承了前一轮的 options，退出预算整个失效。
+	const g = gate();
+	const p = probe([gatedJson(g, { ok: true })]);
+	try {
+		const handlers = registeredHandlers();
+		const agentEnd = handlers.agent_end;
+		const shutdown = handlers.session_shutdown;
+		ok(agentEnd && shutdown, "入口应注册 agent_end 与 session_shutdown");
+		const chat = fakeCtx("shutdown-queued-budget-session");
+
+		await agentEnd({ type: "agent_end" }, chat.ctx);
+		chat.fireTimer();
+		await until(() => p.calls.length === 1);
+
+		// 会话在飞时又长了消息，然后退出：退出快照排进同一条链
+		chat.setMessages(4);
+		const flushing = shutdown({ type: "session_shutdown" }, chat.ctx);
+		g.release();
+		await flushing;
+
+		// 第一轮是 agent_end 的默认预算；第二轮（退出补发）必须是 800ms
+		strictEqual(p.calls.length, 2, `应有在飞一轮 + 补发一轮，实际：${JSON.stringify(p.calls.map((c) => c.url))}`);
+		strictEqual(messageCountOf(p.calls[1].init.body), 4, "补发的一轮应是退出时的新快照");
+		const perRequest = p.timeouts.filter((ms) => ms === 800).length;
+		ok(
+			perRequest >= 1,
+			`退出补发应挂 800ms 预算，实际超时预算序列：${JSON.stringify(p.timeouts)}`,
+		);
+	} finally {
+		g.release();
+		p.restore();
+	}
+});

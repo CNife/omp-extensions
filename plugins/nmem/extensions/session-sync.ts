@@ -61,7 +61,7 @@ interface SyncState {
   draining?: Promise<void>;
   /** Newest snapshot waiting for the chain to drain. Not a flag: a stale snapshot
    *  must never be replayed in place of a fresher one. */
-  queued?: SyncPayload;
+  queued?: { payload: SyncPayload; options?: FlushOptions };
   timer?: unknown;
 }
 
@@ -377,17 +377,19 @@ async function flushPayload(
 ): Promise<void> {
   const state = syncStates.get(payload.threadId) || {};
   syncStates.set(payload.threadId, state);
-  state.queued = payload;
-  state.draining ??= drain(ctx, state, options);
+  // The snapshot is queued with its own options: a shutdown round must not inherit
+  // the defaults (8s + retries) just because an agent_end round got there first.
+  state.queued = { payload, options };
+  state.draining ??= drain(ctx, state);
   await state.draining;
 }
 
-async function drain(ctx: any, state: SyncState, options?: FlushOptions): Promise<void> {
+async function drain(ctx: any, state: SyncState): Promise<void> {
   try {
     while (state.queued) {
-      const next = state.queued;
+      const { payload, options } = state.queued;
       state.queued = undefined;
-      await flushOnce(ctx, next, state, options);
+      await flushOnce(ctx, payload, state, options);
     }
   } finally {
     state.draining = undefined;
