@@ -26,6 +26,15 @@ function startupGuidance(): string {
 // Extension entry
 // ============================================================================
 
+/** Final sync at process exit. The host caps `session_shutdown` handlers at 2s
+ *  (runner.ts SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS) — a hang must not hold Ctrl+C
+ *  hostage — while a plain request gets 8s plus two retries. So this one runs
+ *  single-attempt: 800ms × at most two requests (create → append fallback) = 1.6s,
+ *  inside the window. Should a flush still be in flight (the agent_end debounce
+ *  just fired), this call only joins it — that request is already on the wire,
+ *  and the host's cap bounds the wait. */
+const SHUTDOWN_FLUSH_OPTIONS = { timeoutMs: 800, retries: 0 };
+
 export default function nmem(pi: any) {
   // Guidance injection is opt-in: set NMEM_GUIDANCE=1 to enable.
   // Default: no injection — users self-serve via `nmem context` / `nmem wm read`
@@ -52,7 +61,10 @@ export default function nmem(pi: any) {
     await flush(ctx, event.reason === "new" ? "session_new" : "session_resume");
   });
 
-  pi.on("session_shutdown", async (event: any, ctx: any) => {
-    await flush(ctx, `session_shutdown:${event.reason}`);
+  pi.on("session_shutdown", async (_event: any, ctx: any) => {
+    // SessionShutdownEvent carries only `type`; `reason` belongs to
+    // session_before_switch. Reading it here wrote "session_shutdown:undefined"
+    // to the thread's metadata.sync_reason.
+    await flush(ctx, "session_shutdown", SHUTDOWN_FLUSH_OPTIONS);
   });
 }
