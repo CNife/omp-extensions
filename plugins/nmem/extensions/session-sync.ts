@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * nmem 会话同步 — 把 OMP 会话同步为 Nowledge Mem 线程。
  *
