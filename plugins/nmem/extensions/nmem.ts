@@ -32,7 +32,11 @@ export default function nmem(pi: any) {
   // and the nmem-guide skill.
   if (process.env.NMEM_GUIDANCE?.trim() === "1") {
     pi.on("before_agent_start", async (event: any) => {
-      return { systemPrompt: `${event.systemPrompt}\n\n${startupGuidance()}` };
+      // Append as its own segment: systemPrompt is string[], and the host — plus
+      // providers that place cache breakpoints by segment marker (e.g. Anthropic's
+      // <project-context>) — reads the boundaries. String interpolation would
+      // comma-splice the segments into one block and lose them.
+      return { systemPrompt: [...event.systemPrompt, `\n${startupGuidance()}`] };
     });
   }
 
