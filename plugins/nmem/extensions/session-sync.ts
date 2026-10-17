@@ -4,14 +4,17 @@
  * Ported from @cnife/pi-nmem (packages/nmem/ambient.ts — sync half only)。
  * 文本归一化、payload 构造、两阶段 create/append 状态机、线程重建、
  * inFlight/pending 去重、通知去重都是 implementation；
- * 对外只有 flush(ctx, reason) / scheduleFlush(ctx, reason)。
+ * 对外只有 flush(ctx, reason[, options]) / scheduleFlush(ctx, reason)。
  */
 
 import { basename } from "node:path";
 
-import { NmemError, nmemRequest } from "./rest.ts";
+import { NmemError, nmemRequest, type NmemRequestOptions } from "./rest.ts";
 
 type JsonObject = Record<string, unknown>;
+
+/** Per-request overrides for callers on a host-imposed budget (shutdown flush). */
+type FlushOptions = Pick<NmemRequestOptions, "timeoutMs" | "retries">;
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value.trim() || undefined : undefined;
@@ -54,8 +57,11 @@ interface SyncState {
   created?: boolean;
   lastSyncedCount?: number;
   lastError?: string;
-  inFlight?: Promise<void>;
-  pending?: boolean;
+  /** Serializes rounds for one thread: at most one request chain at a time. */
+  draining?: Promise<void>;
+  /** Newest snapshot waiting for the chain to drain. Not a flag: a stale snapshot
+   *  must never be replayed in place of a fresher one. */
+  queued?: { payload: SyncPayload; options?: FlushOptions };
   timer?: unknown;
 }
 
@@ -258,14 +264,16 @@ function shouldSync(messages: ThreadMessage[]): boolean {
 
 // --- Sync helpers ---
 
-/** Non-throwing POST: delegates to nmemRequest (retries transient faults)
- *  and flattens any NmemError into {ok:false} so the caller never sees a throw. */
+/** Non-throwing POST: delegates to nmemRequest (retries transient faults, unless
+ *  `options` narrows that) and flattens any NmemError into {ok:false} so the
+ *  caller never sees a throw. */
 async function postJson(
   path: string,
   body: JsonObject,
+  options?: FlushOptions,
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
   try {
-    const data = await nmemRequest("POST", path, body);
+    const data = await nmemRequest("POST", path, body, options);
     return { ok: true, status: 200, data };
   } catch (error) {
     if (error instanceof NmemError) {
@@ -318,10 +326,15 @@ function buildSyncPayload(ctx: any, reason: string): SyncPayload | undefined {
   return { threadId, sessionId: id, messages, body };
 }
 
-async function flushOnce(ctx: any, payload: SyncPayload, state: SyncState): Promise<void> {
+async function flushOnce(
+  ctx: any,
+  payload: SyncPayload,
+  state: SyncState,
+  options?: FlushOptions,
+): Promise<void> {
   let result = state.created
     ? { ok: false, status: 409, data: { detail: "append existing thread" } }
-    : await postJson("/threads", payload.body);
+    : await postJson("/threads", payload.body, options);
   if (result.ok) {
     state.created = true;
     state.lastSyncedCount = payload.messages.length;
@@ -337,11 +350,12 @@ async function flushOnce(ctx: any, payload: SyncPayload, state: SyncState): Prom
       deduplicate: true,
       idempotency_key: `${sourceApp()}:${payload.sessionId}:${payload.messages.length}`,
     },
+    options,
   );
   if (!result.ok && state.created && isThreadNotFound(result)) {
     // Thread was deleted out-of-band; recreate.
     state.created = false;
-    result = await postJson("/threads", payload.body);
+    result = await postJson("/threads", payload.body, options);
   }
   if (!result.ok) {
     const detail = JSON.stringify(result.data);
@@ -354,40 +368,63 @@ async function flushOnce(ctx: any, payload: SyncPayload, state: SyncState): Prom
   state.lastError = undefined;
 }
 
-async function flushPayload(ctx: any, payload: SyncPayload): Promise<void> {
-  const key = payload.threadId;
-  const state = syncStates.get(key) || {};
-  syncStates.set(key, state);
-  if (state.inFlight) {
-    state.pending = true;
-    await state.inFlight;
-    return;
+/** One request chain per thread. Callers enqueue their snapshot and await the whole
+ *  drain, so a caller that needs the write to land (shutdown) sees it land. */
+async function flushPayload(
+  ctx: any,
+  payload: SyncPayload,
+  options?: FlushOptions,
+): Promise<void> {
+  const state = syncStates.get(payload.threadId) || {};
+  syncStates.set(payload.threadId, state);
+  // The snapshot is queued with its own options: a shutdown round must not inherit
+  // the defaults (8s + retries) just because an agent_end round got there first.
+  state.queued = { payload, options };
+  state.draining ??= drain(ctx, state);
+  await state.draining;
+}
+
+async function drain(ctx: any, state: SyncState): Promise<void> {
+  try {
+    while (state.queued) {
+      const { payload, options } = state.queued;
+      state.queued = undefined;
+      await flushOnce(ctx, payload, state, options);
+    }
+  } finally {
+    state.draining = undefined;
   }
-  do {
-    state.pending = false;
-    state.inFlight = flushOnce(ctx, payload, state).finally(() => {
-      state.inFlight = undefined;
-    });
-    await state.inFlight;
-  } while (state.pending);
 }
 
-export async function flush(ctx: any, reason: string): Promise<void> {
+/** Cancel a pending debounce for this thread: a rigid flush supersedes it. The
+ *  debounce snapshots at fire time, so cancelling it drops no entries — the rigid
+ *  flush builds an equal-or-wider snapshot from the same branch. Leaving it armed
+ *  would instead add a round to the shutdown path, past the host's 2s cap. */
+function cancelScheduledFlush(ctx: any, state: SyncState | undefined): void {
+  if (state?.timer === undefined) return;
+  ctx.clearTimer(state.timer);
+  state.timer = undefined;
+}
+
+export async function flush(ctx: any, reason: string, options?: FlushOptions): Promise<void> {
   const payload = buildSyncPayload(ctx, reason);
   if (!payload) return;
-  await flushPayload(ctx, payload);
+  cancelScheduledFlush(ctx, syncStates.get(payload.threadId));
+  await flushPayload(ctx, payload, options);
 }
 
-/** Debounced flush — uses ctx.setTimeout for OMP isolation safety. */
+/** Debounced flush — uses ctx.setTimeout for OMP isolation safety.
+ *  The snapshot is taken when the timer fires, not when it is scheduled: a payload
+ *  built 750ms early can miss entries appended in the meantime. */
 export function scheduleFlush(ctx: any, reason: string): void {
-  const payload = buildSyncPayload(ctx, reason);
-  if (!payload) return;
-  const key = payload.threadId;
-  const state = syncStates.get(key) || {};
-  syncStates.set(key, state);
+  const threadId = threadIdFor(ctx);
+  const state = syncStates.get(threadId) || {};
+  syncStates.set(threadId, state);
   if (state.timer) ctx.clearTimer(state.timer);
   state.timer = ctx.setTimeout(() => {
     state.timer = undefined;
+    const payload = buildSyncPayload(ctx, reason);
+    if (!payload) return;
     void flushPayload(ctx, payload).catch(() => {});
   }, FLUSH_DELAY_MS);
 }

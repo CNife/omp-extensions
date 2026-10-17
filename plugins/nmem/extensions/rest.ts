@@ -105,14 +105,14 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries: number = MAX_RETRIES): Promise<T> {
   let lastError: unknown;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (attempt >= MAX_RETRIES) break;
+      if (attempt >= retries) break;
       const code = error instanceof NmemError ? error.code : undefined;
       if (!code || !isRetryable(code)) break;
       await defaultSleep(backoffMs(attempt));
@@ -150,6 +150,14 @@ async function parseErrorDetail(response: Response): Promise<string> {
   }
 }
 
+/** Per-call transport overrides. `timeoutMs` / `retries` exist for callers that
+ *  must fit a host-imposed budget (see session-sync's shutdown flush). */
+export interface NmemRequestOptions {
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+  retries?: number;
+}
+
 /**
  * Shared REST base: one fetch with timeout, structured error mapping, body
  * parsing. Retries transient faults (timeout / backend_unreachable / 5xx).
@@ -159,7 +167,7 @@ export async function nmemRequest<T = unknown>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
-  options?: { fetch?: typeof fetch },
+  options?: NmemRequestOptions,
 ): Promise<T> {
   const config = resolveConfig();
   const url = buildUrl(config.apiUrl, path);
@@ -170,39 +178,47 @@ export async function nmemRequest<T = unknown>(
     headers["X-NMEM-API-Key"] = config.apiKey;
   }
   const serialized = body !== undefined ? JSON.stringify(body) : undefined;
-  const timeoutMs = DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const doFetch = async (): Promise<T> => {
     const fetchImpl = options?.fetch ?? fetch;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    let response: Response;
     try {
-      response = await fetchImpl(url, {
-        method,
-        headers,
-        body: serialized,
-        signal: controller.signal,
-      });
+      let response: Response;
+      try {
+        response = await fetchImpl(url, {
+          method,
+          headers,
+          body: serialized,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new NmemError("timeout", `request aborted after ${timeoutMs}ms`);
+        }
+        throw new NmemError(
+          "backend_unreachable",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new NmemError(mapStatus(response.status), detail, response.status);
+      }
+      return (await response.json()) as T;
     } catch (error) {
-      if (controller.signal.aborted) {
+      // 超时预算覆盖到正文读完：后端先回头、后慢发正文时同样在 timeoutMs 处中止
+      if (controller.signal.aborted && !(error instanceof NmemError)) {
         throw new NmemError("timeout", `request aborted after ${timeoutMs}ms`);
       }
-      throw new NmemError(
-        "backend_unreachable",
-        error instanceof Error ? error.message : String(error),
-      );
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
-    if (!response.ok) {
-      const detail = await parseErrorDetail(response);
-      throw new NmemError(mapStatus(response.status), detail, response.status);
-    }
-    return (await response.json()) as T;
   };
 
-  return withRetry(doFetch);
+  return withRetry(doFetch, options?.retries ?? MAX_RETRIES);
 }
 
 export { NmemError };
