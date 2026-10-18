@@ -30,6 +30,7 @@ bun run smoke                  # 用 `omp -e` 真加载每个扩展入口
 | [howto-skills](plugins/howto-skills/) | how-to 技能合集：browser 提取打法、TTSR 规则编写、加 provider+模型流水线 |
 | [plannotator-cli](plugins/plannotator-cli/) | Plannotator 浏览器审阅/标注（CLI shell-out），注入 /pnr /pna /pnl 三命令 |
 | [ask-consultants](plugins/ask-consultants/) | /ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比 |
+| [loop-reflection](plugins/loop-reflection/) | 主循环周期性收敛检查：连续推进 N 个回合后以隐藏 developer 消息要求模型停下核对方向 |
 
 ## 添加新插件
 
