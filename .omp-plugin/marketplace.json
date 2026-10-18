@@ -42,6 +42,12 @@
       "description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
       "source": "./plugins/ask-consultants",
       "version": "0.2.4"
+    },
+    {
+      "name": "loop-reflection",
+      "description": "主循环周期性收敛检查：连续推进 N 个回合后以隐藏 developer 消息提醒模型停下核对方向",
+      "source": "./plugins/loop-reflection",
+      "version": "0.1.0"
     }
   ]
 }
