@@ -47,7 +47,7 @@
       "name": "loop-reflection",
       "description": "主循环周期性收敛检查：连续推进 N 个回合后以隐藏 developer 消息提醒模型停下核对方向",
       "source": "./plugins/loop-reflection",
-      "version": "0.1.1"
+      "version": "0.1.2"
     }
   ]
 }
