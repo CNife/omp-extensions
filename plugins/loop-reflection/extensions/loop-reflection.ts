@@ -2,8 +2,9 @@
  * loop-reflection — 主循环周期收敛检查。
  *
  * 主循环连续推进 N 个回合后，以一条隐藏 custom 消息插入一次收敛检查：
- * 它要求模型停下来只回答三个问题（目标是否达成、证据是否足够、下一步是否
- * 仍是最小有效动作），并明确禁止「先解释再继续」。
+ * 它要求模型停下来只回答三个问题（目标是否达成、下一次调用能否推翻已有
+ * 结论、下一步是否在重做已完成的验证），并明确禁止「先解释再继续」。
+ * 针对的短板是「任务已做对仍持续重复验证」，意图与边界见 README。
  *
  * 通道选择见 docs/adr/0006-reflection-developer-channel.md：custom 消息在
  * provider 侧落成 developer 角色，不会被包成「用户在工作途中打断」。
@@ -13,7 +14,7 @@
  * 本文件只接线：读配置、订阅事件、调宿主 API。
  *
  * 配置：~/.omp/agent/cnife-loop-reflection.json；文件不存在时写出默认配置。
- * 移植自 pi 的 agent-loop-reflection，三处刻意偏离见 README。
+ * 移植自 pi 的 agent-loop-reflection，刻意偏离见 README。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
