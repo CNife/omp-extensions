@@ -3,6 +3,13 @@
 > Research ticket: [#44 测试 plannotator CLI v0.26.7 是否仍存在 futex 死锁](https://github.com/CNife/omp-extensions/issues/44)，part of [#43 Wayfinder map](https://github.com/CNife/omp-extensions/issues/43)。
 > 日期：2026-08-10
 
+> **已更正（2026-10-20）**：本报告“设置 `BROWSER=none PLANNOTATOR_BROWSER=none` 可抑制浏览器、
+> 从而消除关闭期挂起”的结论不成立。v0.26.7 的 `openBrowser()`（`packages/server/browser.ts:195-198`）
+> 把 `none` 当作 no-op 后继续走默认打开链，所以“抑制组”与“未抑制组”执行的是同一条
+> `cmd.exe /c start` 路径；3/80 与 0/89 的差异无统计意义（Fisher 单侧 p≈0.104）。
+> 另外，plannotator v0.28.22（上游 #1940）起 `PLANNOTATOR_BROWSER=none` 才真正表示“不打开”。
+> 现行插件方案见 [`plugins/plannotator-cli/README.md`](../../plugins/plannotator-cli/README.md)。
+
 ## 结论（TL;DR）
 
 - **经典启动期死锁（HTTP 服务未启动即挂起）在 v0.26.7 上未复现**：3 个子命令共 200+ 次运行，0 次启动死锁。v0.25.1（118 次）同样未复现 —— 原 ~20% 死锁在本机环境两种版本下都无法触发，说明原死锁与运行环境强相关。

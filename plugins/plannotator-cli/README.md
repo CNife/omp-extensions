@@ -52,11 +52,13 @@ Esc 取消则什么都不发生，只有一条可选消息时不弹列表。宿�
 
 ## 稳健性设计
 
-依据 [deadlock 复测报告](../../docs/research/plannotator-deadlock-v0.26.7.md)（wayfinder #43/#44）：
+依据 [deadlock 复测报告](../../docs/research/plannotator-deadlock-v0.26.7.md)（wayfinder #43/#44；
+该报告顶部已有更正说明）：
 
-1. **spawn 必设 `BROWSER=none PLANNOTATOR_BROWSER=none`**：v0.26.7 存在罕见（~1-3%）关闭期挂起
-   （stdout 已写完整 JSON 但进程不退出），全部出现在未抑制浏览器（WSL2 `cmd.exe /c start`）的
-   运行中；抑制后 0/89 次挂起。
+1. **浏览器交给 CLI 默认链**：插件不设置、也不覆盖 `BROWSER` / `PLANNOTATOR_BROWSER`，
+   用户显式配置原样透传。旧版曾强制设 `none` 规避 v0.26.7 的关闭期挂起，但该值在当时是
+   no-op（抑制组并未抑制，0/89 与 3/80 无统计差异），且 v0.28.22 起 CLI 会把它解读为
+   “不打开”，故移除。需要静默时请自行设 `PLANNOTATOR_BROWSER=none`。
 2. **stdout JSON 完整即成功**：`/pna` `/pnl` 读到完整决策 JSON 立即投递反馈并回收进程，不等
    `exited`，残余挂起对用户体验零影响。
 3. **超时兜底**：默认 30min（环境变量 `PLANNOTATOR_FEEDBACK_TIMEOUT_MS` 可覆盖），到点 kill
