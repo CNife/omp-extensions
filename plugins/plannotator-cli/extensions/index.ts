@@ -12,10 +12,10 @@
  * 架构（wayfinder map #43，2026-08）：
  * - CLI shell-out，复用官方 CLI 的进程内 HTTP server + HTML 资产，不依赖
  *   @plannotator/pi-extension npm 包（其 deliverAs:"followUp" 在 omp 上反馈断链）
- * - spawn 必设 BROWSER=none PLANNOTATOR_BROWSER=none：v0.26.7 存在罕见 ~1-3% 关闭期
- *   挂起（stdout 已写完整 JSON 但进程不退出），全部出现在未抑制浏览器
- *   （WSL2 cmd.exe /c start）的运行中；抑制后 0/89 次挂起
- *   （docs/research/plannotator-deadlock-v0.26.7.md）
+ * - 浏览器交给 CLI 默认链：不设置、也不覆盖 BROWSER/PLANNOTATOR_BROWSER。
+ *   旧版曾强制设 `none` 规避 v0.26.7 的关闭期挂起，但该值在当时是 no-op（抑制组
+ *   并未抑制），且 v0.28.22 起会被 CLI 解读为“不打开”，故移除
+ *   （docs/research/plannotator-deadlock-v0.26.7.md 顶部更正）
  * - stdout JSON 完整即成功：不等 exited，残余挂起对用户体验零影响；
  *   json 模式解析决策 JSON 提取 feedback 字段投递，非 json 模式（/pnr）投递原始文本
  * - 超时兜底（默认 30min，PLANNOTATOR_FEEDBACK_TIMEOUT_MS 可覆盖）
@@ -94,15 +94,14 @@ function pnlFeedbackPrefix(ordinal: number): string {
 
 // ── Spawn helpers ──────────────────────────────────────────────────────────
 
-/** 构造子进程环境：继承父环境 + 强制项（#44 研究结论）。 */
+/** 构造子进程环境：继承父环境；只补默认值，不覆盖用户显式设置。 */
 function buildSpawnEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) env[key] = value;
   }
-  // 强制项：抑制浏览器启动路径，消除残余关闭期挂起（3 次挂起全在此路径）。
-  env.BROWSER = "none";
-  env.PLANNOTATOR_BROWSER = "none";
+  // 浏览器交给 CLI 默认链：不写 BROWSER/PLANNOTATOR_BROWSER，用户显式设置
+  // 原样透传。残余关闭期挂起由「stdout JSON 完整即成功」+ 超时兜底处理。
   // 默认禁用 AI 探针，避免 CLI 派生嵌套 `pi --mode rpc` 子进程；用户显式设置时尊重。
   if (env.PLANNOTATOR_AI === undefined) env.PLANNOTATOR_AI = "disabled";
   return env;

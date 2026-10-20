@@ -4,7 +4,7 @@
  * 用 stub CLI（test/fixtures/plannotator，环境契约见 stub 头注释）替换真实
  * plannotator 二进制，验证：
  *   /pnr 参数构造与通知、/pna 路径归一化与空参、/pnl 消息选择器与 annotate-last --stdin 内容、
- *   spawn 环境强制项（BROWSER=none PLANNOTATOR_BROWSER=none PLANNOTATOR_AI=disabled）、
+ *   spawn 环境透传（BROWSER/PLANNOTATOR_BROWSER 不覆盖，PLANNOTATOR_AI=disabled）、
  *   stdout 反馈 -> sendUserMessage 直接发送（无 deliverAs）、json 完整即投递（不等 exited）、
  *   超时兜底、无反馈 / CLI 报错通知。
  * 断言文案与 extensions/index.ts 逐字一致。
@@ -217,7 +217,7 @@ test("注册: 恰好 pnr/pna/pnl 三个命令，description 与源码一致", ()
 // 用例 2/3: /pnr
 // ============================================================================
 
-test("/pnr 无参: review + 无 URL 通知 + spawn env 强制项", async () => {
+test("/pnr 无参: review + 无 URL 通知 + spawn env 透传", async () => {
 	const { scratch, stubLog } = setupScratch();
 	const pi = makePi();
 	plannotatorCli(pi);
@@ -227,12 +227,41 @@ test("/pnr 无参: review + 无 URL 通知 + spawn env 强制项", async () => {
 	await waitFor(() => existsSync(stubLog));
 	const log = readFileSync(stubLog, "utf8");
 	assertStubLog(log, `cwd=${scratch}`, "arg=review");
-	// #44 研究强制项：抑制浏览器启动路径 + 默认禁用 AI 探针
-	assertStubLog(log, "env BROWSER=none", "env PLANNOTATOR_BROWSER=none", "env PLANNOTATOR_AI=disabled");
+	// 浏览器交给 CLI 默认链：不注入 BROWSER/PLANNOTATOR_BROWSER；只默认禁用 AI 探针
+	assertStubLog(log, "env PLANNOTATOR_AI=disabled");
+	ok(!log.includes("env BROWSER=none"), "不应强制 BROWSER=none");
+	ok(!log.includes("env PLANNOTATOR_BROWSER=none"), "不应强制 PLANNOTATOR_BROWSER=none");
 	ok(
 		notified.some((n) => n.msg === "Opening code review in browser..." && n.type === "info"),
 		"应发 info 通知",
 	);
+});
+
+test("spawn env: 父进程 BROWSER/PLANNOTATOR_BROWSER 原样透传", async () => {
+	const { scratch, stubLog } = setupScratch();
+	const prevBrowser = process.env.BROWSER;
+	const prevPnBrowser = process.env.PLANNOTATOR_BROWSER;
+	process.env.BROWSER = "chromium";
+	process.env.PLANNOTATOR_BROWSER = "firefox";
+	try {
+		const pi = makePi();
+		plannotatorCli(pi);
+		command(pi, "pnr").handler(undefined, makeCtx(scratch, [], []));
+
+		await waitFor(() => existsSync(stubLog));
+		const log = readFileSync(stubLog, "utf8");
+		assertStubLog(
+			log,
+			"env BROWSER=chromium",
+			"env PLANNOTATOR_BROWSER=firefox",
+			"env PLANNOTATOR_AI=disabled",
+		);
+	} finally {
+		if (prevBrowser === undefined) delete process.env.BROWSER;
+		else process.env.BROWSER = prevBrowser;
+		if (prevPnBrowser === undefined) delete process.env.PLANNOTATOR_BROWSER;
+		else process.env.PLANNOTATOR_BROWSER = prevPnBrowser;
+	}
 });
 
 test("/pnr 带 URL: review + URL 参数", async () => {
