@@ -30,6 +30,7 @@ omp-extensions/
 1. 在 `plugins/` 下创建子目录，包含 `package.json`（声明 `omp.extensions` 和 `omp.skills`）、`extensions/`、`skills/` 等。
 2. 在 `.omp-plugin/marketplace.json` 的 `plugins` 数组中添加条目。条目需含 `version` 字段（与插件 `package.json` 的 `version` 一致）；**载荷变更**时同步严格递增这两个 version，否则 `omp plugin upgrade`（不带参数）检测不到更新。`bun scripts/check.ts` 会校验这两点。
 3. 安装：`/marketplace add CNife/omp-extensions` + `/marketplace install <name>@omp-extensions`
+4. 升级到新版：`/marketplace update`（catalog 要超过 24 小时才会在启动检查时自动重取，没刷新就用旧 catalog 比对，`omp plugin upgrade` 会报「已是最新」）→ `/marketplace upgrade <name>@omp-extensions` → `/reload-plugins`（当前会话才会重新加载技能）
 
 > 安装副本由 marketplace 分发，不要用 `omp plugin link` / `omp plugin install <本机路径>`（后者同样是链接）把安装副本接到工作树上。本地开发用下方「验证」里的 `-e` 冒烟。
 
