@@ -1,6 +1,6 @@
 ---
 name: long-running-tasks
-description: 需要长时间运行的任务（长命令/构建/训练、长驻服务、远端 ssh 作业、子代理、外部作业）加载：定托管、定等待、取结果。
+description: 需要长时间运行的任务（长命令/构建/训练、长驻服务、远端 ssh 作业、子代理、外部作业），或用 sleep 轮询等结果时加载：定托管、定等待、取结果。
 ---
 
 # 长任务
@@ -32,6 +32,8 @@ description: 需要长时间运行的任务（长命令/构建/训练、长驻�
 长命令显式 `async: true`；`pty: true` 与客户端终端接管的前台命令不自动转后台，会等到 `timeout` 或你打断。机制语义（就绪判定、取证上限、超时上限）以 `omp://tools/bash.md`、`omp://tools/wait.md`、`omp://tools/write.md` 为准——`ready.log` 是 JS 正则、对最近 64 KiB 输出 buffer 整体匹配（`$` 只在 buffer 末尾成立，首匹配即锁存），PCRE 的 `(?i)` 会被拒。
 
 ## 等待
+
+**轮询形态**——`while/until …; do …; sleep N; done`（N 大小无关）——把等待搬进前台命令：跑完不知道下一步，被拦下还得重排。改写就从上面的「等谁」表选最小档：一次最短查询 / watcher job / `wait`。环境里启用 `no-long-sync-sleep` 规则时，它拦的正是 bash 里 ≥100s 的同步 `sleep`；命中后按对应档改写，别重发原命令。
 
 - **结果自己来**：job 与子代理的结果自动投递到你面前；只有完全没事可做时才 `wait`——它无参数，单次 30 分钟封顶后返回仍在跑的快照，再发一次即可。
 - **等条件，不等时间**：盯退出码、日志行、端口、产物文件。**等它到** = watcher job（`until …` 条件满足即退出，投递叫醒；先定好看什么、间隔多少、最多几次）；**看一眼** = `grep proc://<name>` 搜活日志、`read proc://<name>` 看尾部；启动条件交给 `ready`，远端交给 `wait-for`。

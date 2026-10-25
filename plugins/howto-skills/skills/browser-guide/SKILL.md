@@ -48,6 +48,10 @@ description: 用 omp browser 工具做网页数据提取、抓取、自动化操
 
 ## 规范
 
+### 开工先取签名
+
+写第一条 browser eval 前，先 `read xd://eval/browser` 取当前签名，别凭印象写；读时重点核两处实测高频翻车点：`open`/`close` 的参数是 options 对象；`tab.run` 是隔离运行时，没有 `location`/DOM 全局，页况走 `tab` 的 helper、DOM 下沉到 `page`。
+
 ### 拿数据
 
 1. 挂监听：`page.on('response', handler)`，按 URL 特征过滤数据接口。
