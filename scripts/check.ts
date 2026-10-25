@@ -96,6 +96,40 @@ function checkSkills(): void {
   }
 }
 
+/** 技能文档里的 skill://<本技能名>/<路径> 必须指向该技能目录下的实际文件。 */
+function checkSkillLinks(): void {
+  for (const plugin of plugins()) {
+    const skillsDir = join(plugin.dir, "skills");
+    if (!existsSync(skillsDir)) continue;
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const skillDir = join(skillsDir, entry.name);
+      const label = `plugins/${plugin.name}/skills/${entry.name}`;
+      for (const file of filesUnder(skillDir)) {
+        const text = readFileSync(join(skillDir, file), "utf8");
+        for (const match of text.matchAll(/skill:\/\/([A-Za-z0-9_-]+)(\/[^\s`)"']*)?/g)) {
+          const [, name, sub] = match;
+          if (name !== entry.name || sub === undefined) continue; // 别的技能在自己的仓库里校验
+          if (!existsSync(join(skillDir, sub.slice(1)))) {
+            errors.push(`${label}: ${file} 里的 skill://${name}${sub} 指向不存在的文件`);
+          }
+        }
+      }
+    }
+  }
+}
+
+/** 目录下所有文件的相对路径（技能目录都很浅）。 */
+function filesUnder(dir: string, prefix = ""): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) found.push(...filesUnder(join(dir, entry.name), path));
+    else found.push(path);
+  }
+  return found;
+}
+
 /** 逐段数值比较 semver（不能按字符串比：0.10.0 应大于 0.9.0）。 */
 function compareVersion(a: [number, number, number], b: [number, number, number]): number {
   for (let i = 0; i < 3; i++) {
@@ -165,6 +199,7 @@ if (base !== undefined && staged) throw new Error("--base 与 --staged 互斥");
 
 checkManifests();
 checkSkills();
+checkSkillLinks();
 if (base !== undefined || staged) {
   checkVersions(base ?? "HEAD", staged);
 }

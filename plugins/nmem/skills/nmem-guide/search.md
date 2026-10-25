@@ -88,6 +88,8 @@ nmem --json m search "auth architecture rationale" --mode deep
 
 ## 解读结果
 
+- **输出** `--json m search` → `{query,total,search_mode,memories[{id,title,content,score,importance,unit_type,labels,created_at}]}`
+- **读全文** 十条全文一次涌入容易被 harness 折叠，看中的那条用 `nmem m show <id>` 单独取
 - **分数** 0.6-1.0 直接匹配，0.3-0.6 相关，低于 0.3 跳过
 - **找到** 综合并在有帮助时引用
 - **没找到** 明确说。如果当前讨论有价值，建议蒸馏保存

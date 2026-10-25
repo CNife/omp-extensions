@@ -9,8 +9,8 @@ nmem 是本地优先、图谱增强的跨工具个人记忆层。
 
 ## 路由
 
-- 该搜过去知识 → 读 `search.md`
-- 该存新知识 → 读 `save.md`
+- 该搜过去知识 → 读 `skill://nmem-guide/search.md`
+- 该存新知识 → 读 `skill://nmem-guide/save.md`
 - 查 nmem 能干什么 → 看下面
 
 ## 心智模型
