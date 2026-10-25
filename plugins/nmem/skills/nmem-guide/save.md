@@ -35,8 +35,12 @@
 
 ## 用法
 
+内容走 `--stdin` + 单引号 heredoc，正文里的反引号、`$`、换行都按字面进库：
+
 ```bash
-nmem --json m add "content" -t "Title" --unit-type <type> -i <importance>
+nmem --json m add --stdin -t "Title" --unit-type <type> -i <importance> <<'EOF'
+content
+EOF
 ```
 
 ### Unit types
@@ -47,19 +51,19 @@ nmem --json m add "content" -t "Title" --unit-type <type> -i <importance>
 
 ```bash
 # 高价值决策
-nmem --json m add "选 PostgreSQL 不选 MongoDB：交易完整性和复杂 join 需要 ACID" \
-  -t "Database: PostgreSQL for ACID" \
-  --unit-type decision -i 0.9
+nmem --json m add --stdin -t "Database: PostgreSQL for ACID" --unit-type decision -i 0.9 <<'EOF'
+选 PostgreSQL 不选 MongoDB：交易完整性和复杂 join 需要 ACID
+EOF
 
 # 流程
-nmem --json m add "部署顺序：先跑 migration，再 5% canary，看错误率 10 分钟，全量推进" \
-  -t "Production Deploy Procedure" \
-  --unit-type procedure -i 0.7
+nmem --json m add --stdin -t "Production Deploy Procedure" --unit-type procedure -i 0.7 <<'EOF'
+部署顺序：先跑 migration，再 5% canary，看错误率 10 分钟，全量推进
+EOF
 
 # 偏好
-nmem --json m add "TypeScript 优先用 named exports 不用 default exports，重构和 IDE 导航更快" \
-  -t "TS: Named Exports Preferred" \
-  --unit-type preference -i 0.6
+nmem --json m add --stdin -t "TS: Named Exports Preferred" --unit-type preference -i 0.6 <<'EOF'
+TypeScript 优先用 named exports 不用 default exports，重构和 IDE 导航更快
+EOF
 ```
 
 ## Add vs Update
@@ -67,8 +71,10 @@ nmem --json m add "TypeScript 优先用 named exports 不用 default exports，�
 先搜确认没有重复。如果已有 memory 捕获了同一概念、新信息只是细化它，**更新而不是新建**：
 
 ```bash
-nmem --json m update <memory_id> -c "updated content"
+nmem --json m update <memory_id> -c 'updated content'
 ```
+
+`m update` 只有 `-c` 一个入口：用单引号包住正文，反引号和 `$` 就不会被 shell 展开。
 
 一条强 memory 胜过三条弱的。不确定时先搜。
 
