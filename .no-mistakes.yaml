@@ -1,0 +1,23 @@
+# no-mistakes 门禁配置（仓库级）。commands / agent / document.instructions /
+# test.instructions 只从默认分支（origin/main）读取，改完先合进 main 才生效。
+
+commands:
+  # 隔离运行 worktree 只带被跟踪文件，node_modules 要自己装。
+  prepare: "bun install --frozen-lockfile"
+  # 机械检查：类型检查 + marketplace 清单 / 载荷版本 / 技能 frontmatter。
+  lint: "bun run typecheck && bun scripts/check.ts"
+  # 本地定向验证。套件很小（8 个 .test.ts），也是本仓唯一可执行面；
+  # 按 base 比对载荷版本的完整回归留在 .github/workflows/check.yml。
+  test: "bun test"
+
+test:
+  instructions: |
+    扩展入口 plugins/<name>/extensions/*.ts 由 omp 加载，bun test 覆盖不到：动入口要做 `bun run smoke` 真加载验证，判定标准是 stderr 没有 "Failed to load extension" 且注册的命令出现在 available_commands_update 里——omp 加载失败时退出码仍是 0（见 docs/adr/0005-extension-smoke-load.md）。只有技能的插件没有可加载入口，smoke 会跳过。
+    载荷（plugins/<name>/ 下任何被跟踪文件）变更必须同步递增 plugins/<name>/package.json 与 .omp-plugin/marketplace.json 的 version，`bun scripts/check.ts` 会校验。
+
+document:
+  instructions: |
+    README.md 是对外门面：安装方式、插件表、添加插件流程，保持中文。
+    AGENTS.md 是工程约定：仓库结构、添加插件、验证与交付门禁、技能改动路径、frontmatter、不进仓清单。
+    plugins/<name>/README.md 拥有该插件的用法细节；技能正文在 plugins/<name>/skills/<skill>/SKILL.md。
+    GLOSSARY.md 拥有领域词汇；docs/adr/ 一个已决设计一篇 ADR，新增编号而不是改写旧 ADR；docs/agents/ 描述 agent 工作流。
