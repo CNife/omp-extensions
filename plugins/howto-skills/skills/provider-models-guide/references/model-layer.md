@@ -1,6 +1,6 @@
 # model 层：model 条目字段与取参
 
-本章只管 model 条目本身：`providers.<id>.models[]`（自定义模型）与 `providers.<id>.modelOverrides`（覆盖内建模型）里怎么描述一个模型。provider 层字段（baseUrl/api/auth/apiKey/discovery…）见 provider-layer.md；thinking 参数如何映射到 wire 见 thinking.md。基线：omp 18.8.3。
+本章只管 model 条目本身：`providers.<id>.models[]`（自定义模型）与 `providers.<id>.modelOverrides`（覆盖内建模型）里怎么描述一个模型。provider 层字段（baseUrl/api/auth/apiKey/discovery…）见 provider-layer.md；thinking 参数如何映射到 wire 见 thinking.md。基线：omp 18.20.3。
 
 ## 字段一览
 
@@ -11,15 +11,30 @@
 | `id` | 模型标识，必填非空 | 端点上的真实模型名；选择器写作 `<provider>/<model>` 消除歧义 |
 | `name` | 显示名，可选 | |
 | `api` | 传输协议 | 缺省继承 provider 的 `api`；也可指向 runner API（`openai-images`、`openai-embeddings`、`openai-speech` 等） |
-| `kind` | runner 种类（18.7.0+） | `chat`/`image`/`embedding`/`tts`…；显式声明时必须是该 `api` 能服务的 kind，否则校验失败 |
+| `kind` | runner 种类（18.7.0+） | `chat`/`tiny`/`image`/`embedding`/`tts`/`stt`…；显式声明时必须是该 `api` 能服务的 kind，否则校验失败 |
+| `baseUrl` | 模型级推理端点 | 覆盖 provider 级；同一 provider 的 chat 与 `/anthropic` 路由分属两个 URL 时（如 Bedrock）用 |
 | `reasoning` | 推理能力声明 | 布尔。是否/如何真的发 reasoning 参数由 thinking 块与 compat 决定（thinking.md） |
 | `input` | 输入模态 | 只有两个合法值：`[text]`、`[text, image]`。声明 ≠ 送达，见下文 |
+| `imageInputDecoder` | 图片解码后端 | 目前只有 `stb`：后端用 STB 兼容解码器、不收 WebP 时设置，omp 会在发送前转码 |
+| `imageCountBudget` | 单请求图片张数预算 | 正整数，替换 catalog 预算（无规则命中的 provider 默认 5）；超预算会丢最旧图片并改变缓存前缀，网关上限更高时才调 |
+| `tokenizer` | 本地 token 计数方言 | `claude-v3`…`claude-v5-sonnet`、`qwen3`、`deepseek-v3`、`kimi-k2`、`glm5`、`cl100k`、`o200k`；代理的模型 id 非规范时才显式指定 |
+| `supportsTools` | 端点是否接受工具 | 关闭后工具不进请求；用 `omp models` 核对别只看声明 |
 | `contextWindow` | 本地上下文预算 | 自定义模型中提供时必须为正数 |
 | `maxContextWindow` | 放宽后的本地预算 | **只改 omp 本地预算（`/extended-context` 依据），不抬服务端限制**；两端都设时必须 ≥ `contextWindow`；设大前先确认端点真的接受更大的请求 |
 | `maxTokens` | 最大输出 | 自定义模型中提供时必须为正数 |
+| `omitMaxOutputTokens` | 不发送输出上限 | 端点拒绝 max_tokens 字段时设置；它与 `maxTokens` 不是同一件事 |
+| `preferWebsockets` | WebSocket 传输偏好 | 只能在 omp 策略内收窄：显式 `false` 关闭 WS；全局设置关掉时它压不回来 |
 | `cost` | 价格，见下节 | |
 | `promptCache` | 缓存生存期（18.3.5+） | `{ short: 秒, long: 秒 }`；覆盖语义（显式写整体替换 catalog、`{}` 关 warming、只写 `short` 不继承 `long`）见 [provider-layer.md「上下文与压缩归位」](provider-layer.md) |
+| `premiumMultiplier` | 服务层级计费倍率 | 只影响成本/额度对账（如 Copilot premium requests 倍率），不改请求形状 |
+| `contextPromotionTarget` | 上下文溢出时的升级目标 | 配合 `contextPromotion.enabled`（默认关）；值写 `provider/model-id`（跨 provider）或 `model-id`（本 provider 内）。升级是临时切换，不改 `modelRoles` |
+| `compactionModel` | 压缩优先模型 | 只影响压缩选型，不切会话主模型 |
+| `remoteCompaction` | 端点原生压缩 | provider 级写基线、模型级覆盖；字段见 `omp://models.md §Remote compaction` |
+| `headers` | 模型级请求头 | 覆盖 provider 同名键 |
+| `compat` | 端点行为修正 | 见 provider-layer.md「compat 该不该用」；嵌套 routing 块按字段深合并 |
 | `thinking` | thinking 声明，见下节 | |
+
+`modelOverrides` 可覆盖的字段集与上表相同，但**没有 `id`**（键就是模型 id）与 **`baseUrl`**：想改端点只能走 provider 条目或 `models[]` 的自定义条目。`cost` 在 `modelOverrides` 里四项全可选（见下节）。
 
 最小配置（自定义模型）：
 

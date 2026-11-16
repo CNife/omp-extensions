@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 接一个 catalog 里没有的端点（自托管 vLLM、公司网关、兼容代理） | **新 provider** | `providers.<provider>` + `models` 列表，或 + `discovery` |
 | 内建 provider 的端点/认证要改（指向自建代理、换网关、加 header） | **覆盖内置** | 只写 `providers.<provider>` 的连接面字段（override-only），不写 `models` |
-| 某个模型的名称/成本/窗口/能力/思考元数据不对 | **元数据覆盖** | `modelOverrides.<model-id>`（模型层，见 model-layer.md） |
+| 某个模型的名称/成本/窗口/能力/思考元数据不对 | **元数据覆盖** | `providers.<provider>.modelOverrides.<model-id>`（模型层，见 model-layer.md） |
 | provider 端点没问题，只是缺/错某个模型条目 | **加条目** | `models` 列表追加一条，或改用 discovery 自动列出 |
 
 **什么时候动 provider 条目而不是 model 条目**：provider 条目只管「连接面」——baseUrl、api（协议族）、auth、headers、transport、discovery。这些问题出现在「所有模型共用」的层面时才动它：
@@ -43,6 +43,8 @@ providers:
 - `headers`：provider 级是基线，模型级 `headers` 覆盖同名键。
 - `authHeader: true`：把解析出的 key 注入 `Authorization: Bearer <key>`。坑见 auth 一节。
 - `transport: pi-native`：该 provider 下**所有**模型都发给 `omp auth-gateway` 兼容地址的 `POST /v1/pi/stream`，`apiKey` 即 gateway bearer。它无视各模型自己的 `baseUrl`，永远 provider-wide（18.2.9 起也覆盖自定义模型）。判断：只在端点确实是一个 auth-gateway 时用；普通兼容端点加它只会把请求发去错误的地方。
+- provider 级 `compat`：与模型级同一份 schema，是覆盖基线；模型级 `compat` 覆盖同名键，`openRouterRouting`/`vercelGatewayRouting`/`extraBody`/`whenThinking` 这类嵌套块按字段深合并。默认仍不写（见下文 compat 三规则）。
+- Bedrock 专用：`guardrailIdentifier` / `guardrailVersion`（设了 identifier 时缺省 `DRAFT`）/ `guardrailTrace`（`enabled|disabled|enabled_full`）把 guardrail 挂到该 provider 的 Converse 请求上；`requestMetadata` 提供 invocation-log tags（最多 16 条，非法条目发送前丢弃，请求级 tags 覆盖模型级）。这些字段不作用于 Anthropic Messages 路由。
 
 ## auth 家族
 
@@ -142,6 +144,8 @@ providers:
 - **`proxy` 的 per-model api 自动探测**：discovery 打 `GET /v1/models`，按每个条目的 `supported_endpoint_types` 逐模型选 `anthropic-messages`（`/v1/messages`）或 `openai-completions`（`/v1/chat/completions`），都没有时回退 provider 级 `api`（缺省 `openai-completions`）。所以 `proxy` 是唯一**不要求** provider 级 `api` 的 discovery 类型；其他类型都必须写 provider 级 `api`。
 - **`apple-foundation-models`** 也在 discovery 枚举里，但它是受支持 Mac 上的内建隐式传输，不走 HTTP，也不是合法的 `api` 值——自定义远程 provider 不能用。
 - **401/403 不是「没模型」**：18.2.9 起 discovery 的认证失败会以错误形式暴露在 `/models`（模型列表界面）。看到 provider 下列表为空时，先分辨是「discovery 认证被拒」还是「端点真没模型」，别把前者读成后者。
+- **`advertisedReasoning`（默认 `true`，仅 `openai-models-list` / `lm-studio` / `proxy`）**：让 `/v1/models` 行自报的 reasoning 面（`supported_reasoning_levels` / `default_reasoning_level` / `reasoning`）压过 catalog 参考猜测，端点因此只提供它路由真正接受的档位；行里列 `none` 的模型 `:off` 会发 off 开关而不是被钳到最低档。端点的自报和实际不符时设 `false`，退回 catalog 参考行。
+- `injectV1` 只被 `openai-models-list` 接受；其他 discovery 类型写它会校验失败。
 - 超时、`timeoutMs`、各类型的元数据回退细节见 `omp://models.md §Runtime discovery integration`。
 
 ## baseUrl 覆盖按 API scope 生效

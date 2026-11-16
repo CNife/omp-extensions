@@ -83,7 +83,7 @@ disable-model-invocation: true
 
 验证四问：**通不通**（端点可达、认证可用）、**参数对不对**（wire 请求形状）、**工具**（tool call 闭环）、**缓存**（真命中）。按能力门控：配置里没声明的能力对应项标 N/A；HTTP 200 也只是端点应答了，不构成能力与 usage 语义的证据。
 
-所有验证在沙箱里跑：临时 cwd + `PI_CODING_AGENT_DIR=<临时目录>` 重定位 + `--no-extensions --no-skills --no-rules`，产物用完即清，真实 agent 目录零痕迹。五通道：`omp models --json`（静态面）、`PI_REQ_DEBUG=1`（wire 原文，含鉴权，禁止提交、用完即删）、回显探针 `scripts/echo-endpoint.py`（请求形状取证，仅 `openai-completions` 方言能应答跑完）、`omp bench --cache`（缓存命中）、session JSONL（usage 语义，看值不看键）。通不通、工具闭环这些目标端点的问题，最终以真实端点的请求为准，探针只是形状参考。
+所有验证在沙箱里跑：临时 cwd + `PI_CODING_AGENT_DIR=<临时目录>` 重定位 + `--no-extensions --no-skills --no-rules`，产物用完即清，真实 agent 目录零痕迹。五通道：`omp models --json`（静态面）、`PI_REQ_DEBUG=1`（wire 原文，敏感 header 已脱敏但 body 仍含完整上下文，禁止提交、用完即删）、回显探针 `scripts/echo-endpoint.py`（请求形状取证，仅 `openai-completions` 方言能应答跑完）、`omp bench --cache`（缓存命中）、session JSONL（usage 语义，看值不看键）。通不通、工具闭环这些目标端点的问题，最终以真实端点的请求为准，探针只是形状参考。
 
 什么问题去哪篇 → [`references/verification.md`](references/verification.md)：
 
