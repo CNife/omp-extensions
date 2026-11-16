@@ -45,6 +45,14 @@ bun run smoke      # 逐个扩展入口用 `omp --no-extensions -e <entry>` 真�
 - pre-commit hook 跑 `check:staged`（版本递增按暂存内容比对）；CI 跑同一个 `check`，并对 PR 额外比对 base。
 - 判定冒烟结果看 **stderr 无 `Failed to load extension`** 且命令出现在 `available_commands_update` 里——**omp 加载失败的退出码仍是 0**。为什么不用 `--plugin-dir`（它对插件目录静默不加载）见 [ADR 0005](docs/adr/0005-extension-smoke-load.md)。
 
+## 交付
+
+推送走 no-mistakes 本地门禁：`git push no-mistakes <branch>` 依次跑 rebase → review → test → document → lint → push → PR → CI，任一步不过就不推；合入 PR 必须在门禁通过后由 CNife 批准。
+
+- 门禁命令与测试/文档口径在 `.no-mistakes.yaml`：`prepare` 装依赖，`lint` 跑类型检查与 `scripts/check.ts`，`test` 跑 `bun test`。完整回归（按 base 比对载荷版本）仍由 `.github/workflows/check.yml` 在 PR 上跑。
+- 该文件里 `commands` / `test.instructions` / `document.instructions` **只从默认分支读取**，改完要先合进 `main`，否则下一次门禁仍在用旧值。
+- 门禁的 gate 与 daemon 在本机 `~/.no-mistakes/`，不进仓；换机器重跑 `no-mistakes init` 即可（`.no-mistakes.yaml` 已被门禁跟踪，无需重新生成）。
+
 ## 修改技能时改哪里
 
 `skill://<name>` 解析到的是**安装副本**（`~/.omp/plugins/cache/plugins/omp-extensions___<name>___<version>/`），改它不会进仓、也不会被下次安装保留。改源码一律改 `plugins/<name>/skills/`，改完递增载荷 version 并重装。
