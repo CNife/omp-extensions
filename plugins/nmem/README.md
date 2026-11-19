@@ -13,7 +13,7 @@ nmem 会话自动同步 + opt-in 引导注入扩展，取代官方 nowledge-mem-
 
 | 技能 | 模型主动触发 | 说明 |
 | --- | --- | --- |
-| `nmem-guide` | ✅ | 搜索/保存路由 + opt-in 面与排障（SKILL.md 薄入口 + search.md / save.md） |
+| `nmem-guide` | ✅ | 搜 / 看 / 存 / 改一套契约 + opt-in 面与排障（单文件 SKILL.md，一次读取拿全） |
 
 ## 配置
 
