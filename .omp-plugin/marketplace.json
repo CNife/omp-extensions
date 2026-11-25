@@ -23,7 +23,7 @@
       "name": "skills-injection",
       "description": "交互式控制哪些技能被注入到系统提示词，持久化配置",
       "source": "./plugins/skills-injection",
-      "version": "0.1.3"
+      "version": "0.1.4"
     },
     {
       "name": "cache-miss-notices",
@@ -41,7 +41,7 @@
       "name": "ask-consultants",
       "description": "/consultants 选择顾问团成员、/ask-consultants 召集多模型顾问团：并行征询多个模型的独立意见并汇总对比",
       "source": "./plugins/ask-consultants",
-      "version": "0.2.4"
+      "version": "0.2.5"
     },
     {
       "name": "loop-reflection",

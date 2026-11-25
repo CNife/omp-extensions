@@ -44,6 +44,8 @@ bun run smoke      # 逐个扩展入口用 `omp --no-extensions -e <entry>` 真�
 
 - pre-commit hook 跑 `check:staged`（版本递增按暂存内容比对）；CI 跑同一个 `check`，并对 PR 额外比对 base。
 - 判定冒烟结果看 **stderr 无 `Failed to load extension`** 且命令出现在 `available_commands_update` 里——**omp 加载失败的退出码仍是 0**。为什么不用 `--plugin-dir`（它对插件目录静默不加载）见 [ADR 0005](docs/adr/0005-extension-smoke-load.md)。
+- 根 `package.json` 的 `@oh-my-pi/pi-coding-agent` / `@oh-my-pi/pi-tui` devDeps 是对扩展盖章的 API 面，**跟当前 omp 主版本走**：升级 omp 后同步 bump 再跑 `bun run check`，否则 `tsc` 校验的是旧版 API，`DynamicBorder` 这类被删导出的扩展会一直绿到真加载才炸（[ADR 0008](docs/adr/0008-extension-ui-select-checkbox.md)）。
+- 冒烟跑的是 **PATH 上的 omp**（脚本剔掉 `node_modules/.bin`）：`bun run` 会把它前置到 PATH，那里有 devDependency 自带的 npm 版 `omp`，跟用户装的 omp 不是同一个东西，拿它冒烟等于验错版本。
 
 ## 交付
 

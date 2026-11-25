@@ -2,7 +2,7 @@
  * ask-consultants - 多模型顾问团（分发插件，非能力扩展）。
  *
  * 两条命令：
- * - /consultants：SettingsList 交互式选择成员（对齐 /inject-skills），
+ * - /consultants：ctx.ui.select 勾选列表选择成员（对齐 /inject-skills），
  *   候选取 ctx.modelRegistry.getAvailable()，切换即时写入成员配置。
  * - /ask-consultants <评审对象>：把成员清单展开为「^模型标签 + 顾问团指引」
  *   的用户消息投递。代号注册只发生在用户路径（expandMentions 对非
@@ -20,18 +20,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-	DynamicBorder,
-	getAgentDir,
-	getSettingsListTheme,
-} from "@oh-my-pi/pi-coding-agent";
-import {
-	Container,
-	type SettingItem,
-	type SettingsListTheme,
-	SettingsList,
-	Text,
-} from "@oh-my-pi/pi-tui";
+import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import {
 	buildModelMenuItems,
 	type ModelLike,
@@ -62,31 +51,19 @@ export interface CommandCtx {
 	/** 命令上下文的模型注册表（/consultants 的候选来源）。 */
 	modelRegistry?: { getAvailable(): ModelLike[] };
 	ui?: {
-		notify(message: string, level?: string): void;
-		custom(render: (tui: { requestRender(): void }, theme: UiTheme, kb: unknown, done: (v?: unknown) => void) => unknown): Promise<unknown>;
-	};
-}
-
-/** 插件用到的 SettingsList 主题最小面（omp 传入的完整主题的结构子集）。 */
-export interface UiTheme {
-	fg(color: string, text: string): string;
-	bold(text: string): string;
-}
-
-/**
- * 包装 SettingsList 主题：启用中的条目 label 用 success 色高亮，其余走默认主题。
- * `enabled` 按 label 文本记录（渲染时主题 label 函数查询它），toggle 时由 onChange
- * 增删，列表每次输入都 requestRender，所以高亮即时跟随状态。
- */
-function withEnabledHighlight(
-	base: SettingsListTheme,
-	ui: UiTheme,
-	enabled: ReadonlySet<string>,
-): SettingsListTheme {
-	return {
-		...base,
-		label: (text, selected, changed) =>
-			enabled.has(text) ? ui.fg("success", text) : base.label(text, selected, changed),
+		notify(message: string, level?: "info" | "warning" | "error"): void;
+		/** 勾选列表：checkedIndices 为已勾选行，返回被选行的 label（Esc 为 undefined）。 */
+		select(
+			title: string,
+			options: readonly string[],
+			dialogOptions?: {
+				initialIndex?: number;
+				outline?: boolean;
+				selectionMarker?: "radio" | "checkbox";
+				checkedIndices?: readonly number[];
+				markableCount?: number;
+			},
+		): Promise<string | undefined>;
 	};
 }
 
@@ -139,56 +116,41 @@ export default function activate(pi: PiLike): void {
 				return;
 			}
 
-			const items = buildModelMenuItems(models, selected);
-			await ctx.ui?.custom((tui, theme, _kb, done) => {
-				const settingItems: SettingItem[] = items.map((it) => ({
-					id: it.selector,
-					label: it.label,
-					currentValue: it.enabled ? "enabled" : "disabled",
-					values: ["enabled", "disabled"],
-				}));
-				// 启用条目的 label 集合：渲染时主题函数查它来高亮，toggle 时同步增删。
-				const enabledLabels = new Set(items.filter((it) => it.enabled).map((it) => it.label));
-				const labelBySelector = new Map(items.map((it) => [it.selector, it.label] as const));
-
-				const container = new Container();
-				container.addChild(new DynamicBorder((s: string) => theme.fg("border", s)));
-				container.addChild(new Text(theme.fg("accent", theme.bold("Consultants Panel")), 1, 0));
-
-				const settingsList = new SettingsList(
-					settingItems,
-					Math.min(settingItems.length + 2, 15),
-					withEnabledHighlight(getSettingsListTheme(), theme, enabledLabels),
-					(id: string, newValue: string) => {
-						selected = toggleSelected(selected, id, newValue === "enabled");
-						saveMembers(selected);
-						const label = labelBySelector.get(id);
-						if (label !== undefined) {
-							if (newValue === "enabled") enabledLabels.add(label);
-							else enabledLabels.delete(label);
-						}
-					},
-					() => {
-						done(undefined);
+			// omp 19.2 起 pi-tui 的 SettingsList 已移除，改用它原生的 ctx.ui.select 勾选列表
+			// （selectionMarker: "checkbox"）：每次 Enter 关掉再按新状态重开，切换即写配置。
+			const ui = ctx.ui;
+			if (ui === undefined || typeof ui.select !== "function") {
+				process.stderr.write("ask-consultants: 需要 omp 19.2+（宿主未提供 ctx.ui.select）。\n");
+				return;
+			}
+			// 重开时把光标放回刚切换的那一行（按 selector，已启用行会排到前面）。
+			let focus: string | undefined;
+			for (;;) {
+				const menu = buildModelMenuItems(models, selected);
+				const labels = menu.map((it) => it.label);
+				// 勾选 = 在顾问团成员清单里；Done 行不在 markableCount 内，Esc 返回 undefined。
+				const checkedIndices = menu.flatMap((it, i) => (it.enabled ? [i] : []));
+				const picked = await ui.select(
+					`Consultants Panel — ${checkedIndices.length} of ${menu.length} selected`,
+					[...labels, "Done selecting"],
+					{
+						outline: true,
+						initialIndex: Math.max(
+							0,
+							menu.findIndex((it) => it.selector === focus),
+						),
+						selectionMarker: "checkbox",
+						checkedIndices,
+						markableCount: menu.length,
 					},
 				);
-
-				container.addChild(settingsList);
-				container.addChild(new DynamicBorder((s: string) => theme.fg("border", s)));
-
-				return {
-					render(width: number) {
-						return container.render(width);
-					},
-					invalidate() {
-						container.invalidate();
-					},
-					handleInput(data: string) {
-						settingsList.handleInput?.(data);
-						tui.requestRender();
-					},
-				};
-			});
+				const index = picked === undefined ? -1 : labels.indexOf(picked);
+				if (index < 0) return; // Done selecting / Esc
+				const item = menu[index]!;
+				selected = toggleSelected(selected, item.selector, !item.enabled);
+				saveMembers(selected);
+				focus = item.selector;
+			}
 		},
 	});
 

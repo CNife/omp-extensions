@@ -27,12 +27,12 @@ omp plugin link ./plugins/skills-injection
 
 ## 使用
 
-输入 `/inject-skills` 打开设置列表（与 `/settings`、`/tools` 同款交互）：
+输入 `/inject-skills` 打开 omp 原生勾选列表（`ctx.ui.select`，行多时自带 `Type to search`）：
 
 - `↑↓` 导航
-- 输入字符模糊筛选技能名
-- `Space` / `Enter` 切换 `enabled` / `disabled`（即时保存）
-- `Esc` 关闭
+- 直接打字搜索技能名
+- `Enter` 勾选/取消 `enabled` / `disabled`（即时保存；列表重开并回到刚切的那一行）
+- `Esc` 或末尾 `Done selecting` 行关闭
 
 语义：
 
@@ -74,7 +74,7 @@ non-injectable (K): z
 
 1. **`before_agent_start` 拦截**：读取配置，从 `event.systemPrompt`（omp 为 `string[]`）中匹配 `<skills>` 块，删除被排除技能对应的 `- name: description` 行。每 turn 读配置文件，所以下一条消息即生效。无需 `formatSkillsForPrompt`：omp 的技能段已是纯文本列表，按名删除即可。
 
-2. **`/inject-skills` 命令**：`ctx.ui.custom()` + `DynamicBorder`（border 色，对齐 `/settings`）+ `SettingsList`，名称模糊筛选沿用宿主 `SettingsListOptions.typeToSearch`（默认开）。切换即时写配置。行集 = 已加载非 hide 技能 ∪ 配置里登记但未加载的名字（`buildMenuItems`，字母序混排；后者 label 加 `(not installed)`）。
+2. **`/inject-skills` 命令**：omp 原生的 `ctx.ui.select` 勾选列表（`selectionMarker: "checkbox"`，勾选 = 注入；行多时自带 `Type to search`）。切换即时写配置；每次 Enter 关掉再按新状态重开，光标回到刚切的那一行；`Esc` 或末尾 `Done selecting` 行关掉。行集 = 已加载非 hide 技能 ∪ 配置里登记但未加载的名字（`buildMenuItems`，字母序混排；后者 label 加 `(not installed)`）。
 
 3. **`session_start` 通知**（与命令共用 `resolveSkills`）：
    - 技能名单与 `hide` 标志直接取自 omp 导出的 `loadSkills({ cwd })`（omp 已从 frontmatter 归一化 `disable-model-invocation` -> `Skill.hide`，无需再读文件兜底）
@@ -102,16 +102,3 @@ non-injectable (K): z
 ```bash
 cd plugins/skills-injection && bun test  # 或 node --test --experimental-strip-types
 ```
-
-## 已知问题
-
-skills-injection 插件的 `/inject-skills` 命令有两个视觉 bug，根因在 omp 框架而非插件本身，插件层无法干净修复：
-
-1. **幻影 user message**：命令文本被渲染进对话、却从未发给模型（session JSONL 无对应记录），关闭 TUI 后仍残留。
-2. **Working 闪烁**：自定义 TUI 显示期间，顶部状态行挂着 `⠏ Working…`，而非等待输入。
-
-**根因**：omp 主 Enter 提交路径（`input-controller.ts`）对所有扩展命令无条件走 `startPendingSubmission`--先 `addMessageToChat`（echo）再 `ensureLoadingAnimation`（loader）。内置命令（`/tools`、`/settings`）在 `executeBuiltinSlashCommand` 即短路返回，不走此路径；扩展命令不在其中。`ctx.ui.custom`（`showHookCustom`）不清 loader；本地命令无模型 turn，`replaceOptimisticUserMessage` 不触发，故 echo 不被移除（`finishPendingSubmission` 只清引用、不 `removeChild`）。skills-injection 插件代码与官方范例 `examples/extensions/tools.ts` 结构一致。
-
-**影响**：仅视觉，不影响功能——配置读写、`before_agent_start` 过滤均正常。
-
-**修复方向**：改 omp 框架——主 Enter 路径对已知斜杠命令（`isKnownSlashCommand`）在 `startPendingSubmission` 前 `return`（仿队列消息路径 `#deliverQueuedMessage`），两个 bug 同时消失。

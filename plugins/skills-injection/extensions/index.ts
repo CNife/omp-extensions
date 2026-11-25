@@ -3,7 +3,7 @@
  *
  * 交互式控制哪些技能被注入到 omp 的系统提示词（<skills> 段），持久化配置。
  *
- * - /inject-skills 命令：SettingsList 切换 enabled/disabled，即时持久化
+ * - /inject-skills 命令：ctx.ui.select 勾选列表切换 enabled/disabled，即时持久化
  * - before_agent_start：按配置过滤系统提示词 <skills> 段中被排除的技能
  * - session_start：英文通知本会话 injected / forbidden / non-injectable 技能
  *
@@ -21,18 +21,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-	DynamicBorder,
-	getAgentDir,
-	getSettingsListTheme,
-	loadSkills,
-} from "@oh-my-pi/pi-coding-agent";
-import {
-	Container,
-	type SettingItem,
-	SettingsList,
-	Text,
-} from "@oh-my-pi/pi-tui";
+import { getAgentDir, loadSkills } from "@oh-my-pi/pi-coding-agent";
 import {
 	buildMenuItems,
 	DEFAULT_CONFIG,
@@ -133,80 +122,67 @@ export default function (pi: any) {
 		return { systemPrompt: next };
 	});
 
-	// /inject-skills 命令：SettingsList 多开关（对齐 /tools、/settings）
+	// /inject-skills 命令：omp 19.2 起 pi-tui 的 SettingsList 已移除，改用它原生的
+	// ctx.ui.select 勾选列表（selectionMarker: "checkbox"）：每次 Enter 关掉再按新状态
+	// 重开，勾选即注入，切换即写配置。
 	pi.registerCommand("inject-skills", {
 		description: "Configure which skills inject into the system prompt",
 		handler: async (_args: string, ctx: any) => {
 			if (!ctx.hasUI) {
-				ctx.ui.notify(
+				ctx.ui?.notify(
 					"inject-skills requires an interactive TUI",
 					"warning",
 				);
+				return;
+			}
+			const ui = ctx.ui;
+			if (ui === undefined || typeof ui.select !== "function") {
+				process.stderr.write("inject-skills: requires omp 19.2+ (ctx.ui.select unavailable).\n");
 				return;
 			}
 
 			// 菜单行：已加载的非 hide 技能 + 配置里登记但未加载的技能（not installed）
 			const allSkills = await resolveSkills(ctx.cwd);
 			const excluded = new Set(loadConfig().excluded);
-			const sorted = buildMenuItems(allSkills, excluded);
-
-			if (sorted.length === 0) {
+			if (buildMenuItems(allSkills, excluded).length === 0) {
 				ctx.ui.notify("No injectable skills available", "info");
 				return;
 			}
 
-			await ctx.ui.custom((tui: any, theme: any, _kb: any, done: any) => {
-				const settingItems: SettingItem[] = sorted.map((it) => ({
-					id: it.name,
-					label: formatSkillLabel(it),
-					currentValue: excluded.has(it.name) ? "disabled" : "enabled",
-					values: ["enabled", "disabled"],
-				}));
-
-				const container = new Container();
-				// 上下分割线对齐官方 /settings（DynamicBorder + border 色）
-				container.addChild(
-					new DynamicBorder((s: string) => theme.fg("border", s)),
+			// 重开时把光标放回刚切换的那一行（按技能名，行序会因策略重排）。
+			let focus: string | undefined;
+			for (;;) {
+				const items = buildMenuItems(allSkills, excluded);
+				const labels = items.map(formatSkillLabel);
+				// 勾选 = 注入；Done 行不在 markableCount 内，Esc 返回 undefined。
+				const checkedIndices = items.flatMap((it, i) =>
+					excluded.has(it.name) ? [] : [i],
 				);
-				container.addChild(
-					new Text(theme.fg("accent", theme.bold("Skills Injection")), 1, 0),
-				);
-
-				const settingsList = new SettingsList(
-					settingItems,
-					Math.min(settingItems.length + 2, 15),
-					getSettingsListTheme(),
-					(id: string, newValue: string) => {
-						if (newValue === "disabled") {
-							excluded.add(id);
-						} else {
-							excluded.delete(id);
-						}
-						saveConfig({ excluded: [...excluded].sort() });
-					},
-					() => {
-						done(undefined);
+				const picked = await ctx.ui.select(
+					`Skills Injection — ${checkedIndices.length} of ${items.length} injected`,
+					[...labels, "Done selecting"],
+					{
+						outline: true,
+						initialIndex: Math.max(
+							0,
+							items.findIndex((it) => it.name === focus),
+						),
+						selectionMarker: "checkbox",
+						checkedIndices,
+						markableCount: items.length,
 					},
 				);
-
-				container.addChild(settingsList);
-				container.addChild(
-					new DynamicBorder((s: string) => theme.fg("border", s)),
-				);
-
-				return {
-					render(width: number) {
-						return container.render(width);
-					},
-					invalidate() {
-						container.invalidate();
-					},
-					handleInput(data: string) {
-						settingsList.handleInput?.(data);
-						tui.requestRender();
-					},
-				};
-			});
+				const index = labels.indexOf(picked);
+				if (index < 0) return; // Done selecting / Esc
+				const item = items[index];
+				if (excluded.has(item.name)) {
+					excluded.delete(item.name);
+				} else {
+					excluded.add(item.name);
+				}
+				saveConfig({ excluded: [...excluded].sort() });
+				focus = item.name;
+			}
 		},
 	});
 }
