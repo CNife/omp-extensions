@@ -16,7 +16,7 @@
 
 ## 完整 JSON 即成功，短宽限后 kill
 
-stdout 一旦能解析出完整决策 JSON 就立即投递并回收进程，不等 `exited`——关闭期挂起对结果零影响。stdout 已关闭但进程仍不退出的，等 3 秒再 `SIGKILL`。kill 与 stdin 写入的错误处理见 [#132](https://github.com/CNife/omp-extensions/issues/132)。
+stdout 一旦能解析出完整决策 JSON 就立即投递并回收进程，不等 `exited`——关闭期挂起对结果零影响。stdout 已关闭但进程仍不退出的，等 3 秒再 `SIGKILL`。kill 与 stdin 写入的错误处理见 [ADR 0012](0012-plannotator-subprocess-error-visibility.md)。
 
 ## 测试包装 Bun.spawn
 
