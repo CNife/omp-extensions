@@ -7,24 +7,41 @@
  *   - stderr 不含 "Failed to load extension"
  *   - 入口源码里 registerCommand("<字面名>") 的命令名都出现在 available_commands_update 中
  *
- * 需要 PATH 上有 omp；仅技能插件没有可加载的入口，跳过。
+ * 跑的是用户 PATH 上的 omp（插件真正加载进去的那个），不是本仓 node_modules 里的 omp CLI：
+ * `bun run` 会把 `node_modules/.bin` 前置到 PATH，那里有 devDependency `@oh-my-pi/pi-coding-agent`
+ * 的 npm 版 `omp`（`dist/cli.js`），跟用户装的 omp 不是同一个东西。仅技能插件没有可加载的入口，跳过。
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 
 import { plugins, ROOT } from "./plugins.ts";
 
 const LOAD_FAILURE = "Failed to load extension";
 const TIMEOUT_MS = 60_000;
 
+/** 用户 PATH 上的 omp；剔掉本仓的 `node_modules/.bin`（那里是 devDependency 的 npm CLI）。 */
+function resolveOmp(): string {
+  const bin = resolve(join(ROOT, "node_modules", ".bin"));
+  const path = (process.env.PATH ?? "")
+    .split(delimiter)
+    .filter((dir) => dir !== "" && resolve(dir) !== bin)
+    .join(delimiter);
+  const omp = Bun.which("omp", { PATH: path });
+  if (omp === null) {
+    console.error(`失败 未在 PATH 上找到 omp（已跳过 ${bin}）：冒烟需要用户实际安装的 omp。`);
+    process.exit(1);
+  }
+  return omp;
+}
+
 interface LoadResult {
   ok: boolean;
   reason?: string;
 }
 
-async function smokeEntry(entryPath: string): Promise<LoadResult> {
-  const proc = Bun.spawn(["omp", "--no-extensions", "-e", entryPath, "--mode", "rpc", "--no-ui"], {
+async function smokeEntry(omp: string, entryPath: string): Promise<LoadResult> {
+  const proc = Bun.spawn([omp, "--no-extensions", "-e", entryPath, "--mode", "rpc", "--no-ui"], {
     cwd: ROOT,
     stdin: "ignore",
     stdout: "pipe",
@@ -55,6 +72,7 @@ async function smokeEntry(entryPath: string): Promise<LoadResult> {
 
 const failures: string[] = [];
 let checked = 0;
+const omp = resolveOmp();
 
 for (const plugin of plugins()) {
   if (plugin.extensionEntries.length === 0) {
@@ -70,7 +88,7 @@ for (const plugin of plugins()) {
       continue;
     }
     const started = Bun.nanoseconds();
-    const result = await smokeEntry(entryPath);
+    const result = await smokeEntry(omp, entryPath);
     const elapsed = ((Bun.nanoseconds() - started) / 1e6).toFixed(0);
     checked++;
     if (result.ok) {
