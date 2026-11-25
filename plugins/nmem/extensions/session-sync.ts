@@ -1,38 +1,20 @@
-/**
- * nmem 会话同步 — 把 OMP 会话同步为 Nowledge Mem 线程。
- *
- * Ported from @cnife/pi-nmem (packages/nmem/ambient.ts — sync half only)。
- * 文本归一化、payload 构造、两阶段 create/append 状态机、线程重建、
- * inFlight/pending 去重、通知去重都是 implementation；
- * 对外只有 flush(ctx, reason[, options]) / scheduleFlush(ctx, reason)。
- */
-
 import { basename } from "node:path";
 
 import { NmemError, nmemRequest, type NmemRequestOptions } from "./rest.ts";
 
 type JsonObject = Record<string, unknown>;
 
-/** Per-request overrides for callers on a host-imposed budget (shutdown flush). */
 type FlushOptions = Pick<NmemRequestOptions, "timeoutMs" | "retries">;
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value.trim() || undefined : undefined;
 }
 
-// ============================================================================
-// Ambient sync (ported from ambient.ts — sync half only)
-// ============================================================================
-
 const MAX_MESSAGE_CHARS = 20_000;
 const FLUSH_DELAY_MS = 750;
 const DEFAULT_PLUGIN_VERSION = "omp-nmem/0.2.0";
 
-// --- Source identity ---
-
 function sourceApp(): string {
-  // "omp" keeps thread_id prefix (omp-) stable with the official plugin
-  // for data continuity. Env override available for advanced use.
   return process.env.NMEM_PLUGIN_SOURCE_APP?.trim() || "omp";
 }
 
@@ -43,8 +25,6 @@ function hostLabel(): string {
 function pluginVersion(): string {
   return process.env.NMEM_PLUGIN_VERSION?.trim() || DEFAULT_PLUGIN_VERSION;
 }
-
-// --- Types ---
 
 interface ThreadMessage {
   role: "user" | "assistant" | "system";
@@ -57,10 +37,7 @@ interface SyncState {
   created?: boolean;
   lastSyncedCount?: number;
   lastError?: string;
-  /** Serializes rounds for one thread: at most one request chain at a time. */
   draining?: Promise<void>;
-  /** Newest snapshot waiting for the chain to drain. Not a flag: a stale snapshot
-   *  must never be replayed in place of a fresher one. */
   queued?: { payload: SyncPayload; options?: FlushOptions };
   timer?: unknown;
 }
@@ -81,12 +58,8 @@ interface SessionManagerLike {
   getCwd?: () => string;
 }
 
-// --- Module state ---
-
 const syncStates = new Map<string, SyncState>();
 const syncNotifyWarnings = new Set<string>();
-
-// --- Text helpers ---
 
 function truncate(text: string): string {
   if (text.length <= MAX_MESSAGE_CHARS) return text;
@@ -262,11 +235,6 @@ function shouldSync(messages: ThreadMessage[]): boolean {
   );
 }
 
-// --- Sync helpers ---
-
-/** Non-throwing POST: delegates to nmemRequest (retries transient faults, unless
- *  `options` narrows that) and flattens any NmemError into {ok:false} so the
- *  caller never sees a throw. */
 async function postJson(
   path: string,
   body: JsonObject,
@@ -342,7 +310,6 @@ async function flushOnce(
     return;
   }
 
-  // Two-phase: POST /threads creates; on 2nd+ sync, append with dedup.
   result = await postJson(
     `/threads/${encodeURIComponent(payload.threadId)}/append`,
     {
@@ -353,7 +320,6 @@ async function flushOnce(
     options,
   );
   if (!result.ok && state.created && isThreadNotFound(result)) {
-    // Thread was deleted out-of-band; recreate.
     state.created = false;
     result = await postJson("/threads", payload.body, options);
   }
@@ -368,8 +334,6 @@ async function flushOnce(
   state.lastError = undefined;
 }
 
-/** One request chain per thread. Callers enqueue their snapshot and await the whole
- *  drain, so a caller that needs the write to land (shutdown) sees it land. */
 async function flushPayload(
   ctx: any,
   payload: SyncPayload,
@@ -377,8 +341,6 @@ async function flushPayload(
 ): Promise<void> {
   const state = syncStates.get(payload.threadId) || {};
   syncStates.set(payload.threadId, state);
-  // The snapshot is queued with its own options: a shutdown round must not inherit
-  // the defaults (8s + retries) just because an agent_end round got there first.
   state.queued = { payload, options };
   state.draining ??= drain(ctx, state);
   await state.draining;
@@ -396,10 +358,6 @@ async function drain(ctx: any, state: SyncState): Promise<void> {
   }
 }
 
-/** Cancel a pending debounce for this thread: a rigid flush supersedes it. The
- *  debounce snapshots at fire time, so cancelling it drops no entries — the rigid
- *  flush builds an equal-or-wider snapshot from the same branch. Leaving it armed
- *  would instead add a round to the shutdown path, past the host's 2s cap. */
 function cancelScheduledFlush(ctx: any, state: SyncState | undefined): void {
   if (state?.timer === undefined) return;
   ctx.clearTimer(state.timer);
@@ -413,9 +371,6 @@ export async function flush(ctx: any, reason: string, options?: FlushOptions): P
   await flushPayload(ctx, payload, options);
 }
 
-/** Debounced flush — uses ctx.setTimeout for OMP isolation safety.
- *  The snapshot is taken when the timer fires, not when it is scheduled: a payload
- *  built 750ms early can miss entries appended in the meantime. */
 export function scheduleFlush(ctx: any, reason: string): void {
   const threadId = threadIdFor(ctx);
   const state = syncStates.get(threadId) || {};

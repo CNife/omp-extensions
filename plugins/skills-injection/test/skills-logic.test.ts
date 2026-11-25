@@ -1,10 +1,3 @@
-/**
- * skills-injection 纯逻辑测试。
- *
- * 适配 omp：技能段为 <skills> 块内 `- name: description` 行；hide 对应 pi 的
- * disableModelInvocation。fixtures 贴近 omp buildSystemPrompt 的产出。
- */
-
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
 import {
@@ -18,10 +11,6 @@ import {
 	type SkillLike,
 } from "../extensions/skills-logic.ts";
 
-// ============================================================================
-// Fixtures
-// ============================================================================
-
 function makeSkill(
 	name: string,
 	opts: { hide?: boolean } = {},
@@ -29,15 +18,10 @@ function makeSkill(
 	return { name, hide: opts.hide ?? false };
 }
 
-/** 构造含 <skills> 段的系统提示词（贴近 omp buildSystemPrompt 产出） */
 function makeSystemPrompt(skillNames: string[]): string {
 	const lines = skillNames.map((n) => `- ${n}: description for ${n}`);
 	return `# Skills & Rules\nSkills are specialized knowledge. If one matches your task, you MUST read \`skill://<name>\` before proceeding.\n<skills>\n${lines.join("\n")}\n</skills>\n`;
 }
-
-// ============================================================================
-// parseConfig
-// ============================================================================
 
 test("parseConfig: 合法配置原样返回", () => {
 	deepStrictEqual(parseConfig({ excluded: ["a", "b"] }), {
@@ -68,10 +52,6 @@ test("parseConfig: 过滤非 string 元素", () => {
 		excluded: ["a", "b"],
 	});
 });
-
-// ============================================================================
-// filterSkillsSection
-// ============================================================================
 
 test("filterSkillsSection: 有命中 -> 移除被排除的技能行", () => {
 	const result = filterSkillsSection(makeSystemPrompt(["a", "b", "c"]), new Set(["b"]));
@@ -126,10 +106,6 @@ test("filterSkillsSection: 多技能保留剩余项原序", () => {
 	]);
 });
 
-// ============================================================================
-// summarizeSkills / formatStartupSummary
-// ============================================================================
-
 test("summarizeSkills: 三类分类 + 字母序", () => {
 	const skills = [makeSkill("z", { hide: true }), makeSkill("b"), makeSkill("a")];
 	const summary = summarizeSkills(skills, new Set(["b"]));
@@ -164,10 +140,6 @@ test("formatStartupSummary: 多行英文 + 空类写 0", () => {
 		"Skills injection\ninjected (2): a, b\nforbidden (0): 0\nnon-injectable (1): z",
 	);
 });
-
-// ============================================================================
-// buildMenuItems / formatSkillLabel
-// ============================================================================
 
 test("buildMenuItems: 已加载非 hide ∪ 未加载的 excluded，按名字混排", () => {
 	const skills = [makeSkill("b"), makeSkill("d")];

@@ -1,7 +1,3 @@
-/**
- * ask-consultants 纯逻辑测试。
- */
-
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
 import {
@@ -14,17 +10,9 @@ import {
 	type ModelLike,
 } from "../extensions/consultants-logic.ts";
 
-// ============================================================================
-// Fixtures
-// ============================================================================
-
 function makeModel(provider: string, id: string): ModelLike {
 	return { provider, id };
 }
-
-// ============================================================================
-// SELECTOR_RE / invalidMembers
-// ============================================================================
 
 test("SELECTOR_RE: 裸 provider/id 合法，id 可含斜杠", () => {
 	ok(SELECTOR_RE.test("openai-codex/gpt-6-sol"));
@@ -50,10 +38,6 @@ test("invalidMembers: 挑出旧格式与非法条目", () => {
 	);
 });
 
-// ============================================================================
-// parseMembers
-// ============================================================================
-
 test("parseMembers: 合法配置原样返回", () => {
 	deepStrictEqual(parseMembers('{"members": ["a/b", "c/d"]}'), ["a/b", "c/d"]);
 });
@@ -77,10 +61,6 @@ test("parseMembers: 非法 JSON 抛 SyntaxError（不悄悄回退默认）", () 
 	ok(threw);
 });
 
-// ============================================================================
-// buildModelMenuItems
-// ============================================================================
-
 test("buildModelMenuItems: 已启用排最前，组内字母序", () => {
 	const models = [makeModel("zeta", "m1"), makeModel("alpha", "m2"), makeModel("mid", "m9")];
 	deepStrictEqual(buildModelMenuItems(models, ["zeta/m1", "mid/m9"]), [
@@ -98,22 +78,13 @@ test("buildModelMenuItems: 配置里登记但当前不可用的条目保留并�
 	]);
 });
 
-// ============================================================================
-// toggleSelected
-// ============================================================================
-
 test("toggleSelected: on 追加到尾部，off 移除，入参不变", () => {
 	const base = ["a/b", "c/d"];
 	deepStrictEqual(toggleSelected(base, "e/f", true), ["a/b", "c/d", "e/f"]);
 	deepStrictEqual(toggleSelected(base, "a/b", false), ["c/d"]);
 	deepStrictEqual(base, ["a/b", "c/d"]);
-	// 重复 on：移到尾部，不产生重复项
 	deepStrictEqual(toggleSelected(base, "a/b", true), ["c/d", "a/b"]);
 });
-
-// ============================================================================
-// DEFAULT_MEMBERS
-// ============================================================================
 
 test("DEFAULT_MEMBERS: 全部是裸 selector", () => {
 	deepStrictEqual(invalidMembers(DEFAULT_MEMBERS), []);

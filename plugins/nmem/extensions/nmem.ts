@@ -1,15 +1,4 @@
-/**
- * nmem — OMP extension 薄入口：何时同步。
- *
- * 仅钩子注册 + opt-in guidance 注入判定；REST 传输见 ./rest.ts，
- * 会话同步见 ./session-sync.ts。
- */
-
 import { flush, scheduleFlush } from "./session-sync.ts";
-
-// ============================================================================
-// Guidance injection (opt-in)
-// ============================================================================
 
 function startupGuidance(): string {
   return [
@@ -22,29 +11,11 @@ function startupGuidance(): string {
   ].join("\n");
 }
 
-// ============================================================================
-// Extension entry
-// ============================================================================
-
-/** Final sync at process exit. The host caps `session_shutdown` handlers at 2s
- *  (runner.ts SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS) — a hang must not hold Ctrl+C
- *  hostage — while a plain request gets 8s plus two retries. So this one runs
- *  single-attempt: 800ms × at most two requests (create → append fallback) = 1.6s,
- *  inside the window. Should a flush still be in flight (the agent_end debounce
- *  just fired), this call only joins it — that request is already on the wire,
- *  and the host's cap bounds the wait. */
 const SHUTDOWN_FLUSH_OPTIONS = { timeoutMs: 800, retries: 0 };
 
 export default function nmem(pi: any) {
-  // Guidance injection is opt-in: set NMEM_GUIDANCE=1 to enable.
-  // Default: no injection — users self-serve via `nmem context` / `nmem wm read`
-  // and the nmem-guide skill.
   if (process.env.NMEM_GUIDANCE?.trim() === "1") {
     pi.on("before_agent_start", async (event: any) => {
-      // Append as its own segment: systemPrompt is string[], and the host — plus
-      // providers that place cache breakpoints by segment marker (e.g. Anthropic's
-      // <project-context>) — reads the boundaries. String interpolation would
-      // comma-splice the segments into one block and lose them.
       return { systemPrompt: [...event.systemPrompt, `\n${startupGuidance()}`] };
     });
   }
@@ -62,9 +33,6 @@ export default function nmem(pi: any) {
   });
 
   pi.on("session_shutdown", async (_event: any, ctx: any) => {
-    // SessionShutdownEvent carries only `type`; `reason` belongs to
-    // session_before_switch. Reading it here wrote "session_shutdown:undefined"
-    // to the thread's metadata.sync_reason.
     await flush(ctx, "session_shutdown", SHUTDOWN_FLUSH_OPTIONS);
   });
 }

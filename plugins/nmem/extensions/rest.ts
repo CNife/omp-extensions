@@ -1,16 +1,5 @@
-/**
- * nmem REST 传输 — config 解析 + 带 retry/backoff/超时的 fetch 基座。
- *
- * Ported from @cnife/pi-nmem (packages/nmem/client.ts)。
- * Backend config: ~/.nowledge-mem/config.json + NMEM_API_URL / NMEM_API_KEY env vars.
- */
-
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-
-// ============================================================================
-// Config (inlined from client.ts — slimmed: apiUrl + apiKey only)
-// ============================================================================
 
 const DEFAULT_API_URL = "http://127.0.0.1:14242";
 const CONFIG_PATH = `${homedir()}/.nowledge-mem/config.json`;
@@ -41,7 +30,6 @@ function readSharedConfig(): JsonObject {
   }
 }
 
-/** Priority: env > config.json > default. */
 function resolveConfig(): NmemConfig {
   const config = readSharedConfig();
   const apiUrl = (
@@ -56,10 +44,6 @@ function resolveConfig(): NmemConfig {
     stringValue(config.api_key);
   return { apiUrl, ...(apiKey ? { apiKey } : {}) };
 }
-
-// ============================================================================
-// REST client + retry (inlined from client.ts)
-// ============================================================================
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_RETRIES = 2;
@@ -150,19 +134,12 @@ async function parseErrorDetail(response: Response): Promise<string> {
   }
 }
 
-/** Per-call transport overrides. `timeoutMs` / `retries` exist for callers that
- *  must fit a host-imposed budget (see session-sync's shutdown flush). */
 export interface NmemRequestOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   retries?: number;
 }
 
-/**
- * Shared REST base: one fetch with timeout, structured error mapping, body
- * parsing. Retries transient faults (timeout / backend_unreachable / 5xx).
- * Throws NmemError on any non-2xx or network failure; returns parsed JSON.
- */
 export async function nmemRequest<T = unknown>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
@@ -208,7 +185,6 @@ export async function nmemRequest<T = unknown>(
       }
       return (await response.json()) as T;
     } catch (error) {
-      // 超时预算覆盖到正文读完：后端先回头、后慢发正文时同样在 timeoutMs 处中止
       if (controller.signal.aborted && !(error instanceof NmemError)) {
         throw new NmemError("timeout", `request aborted after ${timeoutMs}ms`);
       }
