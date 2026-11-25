@@ -1,16 +1,4 @@
 #!/usr/bin/env bun
-/**
- * 机械检查：marketplace 清单一致性 + 技能 frontmatter + 载荷变更必须递增版本。
- *
- * 用法：
- *   bun scripts/check.ts                 只做清单与技能检查
- *   bun scripts/check.ts --base <ref>    额外比对 <ref>...HEAD 的载荷变更（PR / CI）
- *   bun scripts/check.ts --staged        额外比对暂存内容与 HEAD 的载荷变更（pre-commit）
- *
- * 「载荷」= plugins/<name>/ 下任何被 git 跟踪的文件，即安装副本会分发的全部内容
- * （见 GLOSSARY.md）。载荷变更后必须让 package.json 与 marketplace.json 的
- * version 同步严格递增，否则 `omp plugin upgrade` 检测不到更新。
- */
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -66,7 +54,6 @@ function checkManifests(): void {
   }
 }
 
-/** 技能检查：SKILL.md 存在、frontmatter 的 name 等于目录名、description 非空。 */
 function checkSkills(): void {
   for (const plugin of plugins()) {
     const skillsDir = join(plugin.dir, "skills");
@@ -96,7 +83,6 @@ function checkSkills(): void {
   }
 }
 
-/** 技能文档里的 skill://<本技能名>/<路径> 必须指向该技能目录下的实际文件。 */
 function checkSkillLinks(): void {
   for (const plugin of plugins()) {
     const skillsDir = join(plugin.dir, "skills");
@@ -109,7 +95,7 @@ function checkSkillLinks(): void {
         const text = readFileSync(join(skillDir, file), "utf8");
         for (const match of text.matchAll(/skill:\/\/([A-Za-z0-9_-]+)(\/[^\s`)"']*)?/g)) {
           const [, name, sub] = match;
-          if (name !== entry.name || sub === undefined) continue; // 别的技能在自己的仓库里校验
+          if (name !== entry.name || sub === undefined) continue;
           if (!existsSync(join(skillDir, sub.slice(1)))) {
             errors.push(`${label}: ${file} 里的 skill://${name}${sub} 指向不存在的文件`);
           }
@@ -119,7 +105,6 @@ function checkSkillLinks(): void {
   }
 }
 
-/** 目录下所有文件的相对路径（技能目录都很浅）。 */
 function filesUnder(dir: string, prefix = ""): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -130,7 +115,6 @@ function filesUnder(dir: string, prefix = ""): string[] {
   return found;
 }
 
-/** 逐段数值比较 semver（不能按字符串比：0.10.0 应大于 0.9.0）。 */
 function compareVersion(a: [number, number, number], b: [number, number, number]): number {
   for (let i = 0; i < 3; i++) {
     if (a[i] !== b[i]) return a[i] - b[i];
@@ -138,7 +122,6 @@ function compareVersion(a: [number, number, number], b: [number, number, number]
   return 0;
 }
 
-/** 载荷变更的插件必须严格递增 version；比对基准由 --base / --staged 给出。 */
 function checkVersions(base: string, staged: boolean): void {
   const changed = git([
     "diff",
@@ -156,7 +139,7 @@ function checkVersions(base: string, staged: boolean): void {
     try {
       return git(["show", ref]).match(/"version"[ \t]*:[ \t]*"([^"]+)"/)?.[1];
     } catch {
-      return undefined; // 该 ref 下没有这个文件（新增插件）
+      return undefined;
     }
   };
   const parseVersion = (version: string, label: string): [number, number, number] | undefined => {
@@ -170,7 +153,7 @@ function checkVersions(base: string, staged: boolean): void {
 
   for (const name of new Set(changed.map((path) => path.split("/")[1]))) {
     const baseVersion = versionAt(`${staged ? "HEAD" : base}:${manifestPathOf(name)}`);
-    if (baseVersion === undefined) continue; // 新增插件：清单一致性已覆盖
+    if (baseVersion === undefined) continue;
     const headVersion = staged
       ? versionAt(`:${manifestPathOf(name)}`)
       : readJson<{ version?: string }>(join(ROOT, manifestPathOf(name))).version;

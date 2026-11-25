@@ -1,10 +1,3 @@
-/**
- * loop-reflection 纯逻辑测试。
- *
- * 只断言模块的外部行为：给定配置与事件序列，得到什么（是否触发、计数如何变化、
- * 门控是否命中）。不断言内部字段名，也不触碰 omp 运行时。
- */
-
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
 import {
@@ -22,10 +15,6 @@ import {
 	renderReminderText,
 } from "../extensions/loop-reflection-logic.ts";
 
-// ============================================================================
-// Fixtures
-// ============================================================================
-
 const MODEL = { provider: "p", id: "m" };
 
 function configWith(overrides: Partial<LoopReflectionConfig> = {}): LoopReflectionConfig {
@@ -36,7 +25,6 @@ function turn(model: { provider: string; id: string } | undefined, isToolUse = t
 	return { kind: "turn", model, isToolUse };
 }
 
-/** 连续喂入事件，返回最终状态与每次是否触发。 */
 function run(
 	config: LoopReflectionConfig,
 	events: LoopReflectionEvent[],
@@ -51,10 +39,6 @@ function run(
 	}
 	return { state, fired };
 }
-
-// ============================================================================
-// parseConfig
-// ============================================================================
 
 test("parseConfig: 合法配置原样返回", () => {
 	const parsed = {
@@ -132,10 +116,6 @@ test("parseConfig: 未知字段忽略", () => {
 	strictEqual("unknown" in config, false);
 });
 
-// ============================================================================
-// matchesModelGate
-// ============================================================================
-
 test("matchesModelGate: 两侧都空 -> 全部启用", () => {
 	ok(matchesModelGate(MODEL, { include: [], exclude: [] }));
 });
@@ -184,10 +164,6 @@ test("matchesModelGate: 模型未知 -> 不匹配", () => {
 test("matchesModelGate: exclude 命中裸 id 也生效", () => {
 	strictEqual(matchesModelGate(MODEL, { include: [], exclude: ["m"] }), false);
 });
-
-// ============================================================================
-// nextState —— 计数归约
-// ============================================================================
 
 test("nextState: 门控匹配的 turn 递减计数", () => {
 	const config = configWith({ intervalTurns: 3 });
@@ -302,17 +278,9 @@ test("nextState: 不修改传入的状态对象", () => {
 	deepStrictEqual(state, { turnsUntilNextReminder: 3, lastModelKey: undefined });
 });
 
-// ============================================================================
-// modelKeyOf
-// ============================================================================
-
 test("modelKeyOf: provider/id", () => {
 	strictEqual(modelKeyOf(MODEL), "p/m");
 });
-
-// ============================================================================
-// 文案
-// ============================================================================
 
 test("renderReminderText: 默认文案替换全部 {turns} 占位", () => {
 	const text = renderReminderText(configWith({ intervalTurns: 7 }));

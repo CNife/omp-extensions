@@ -1,5 +1,3 @@
-/** 插件目录的共同读取逻辑：check.ts 与 smoke.ts 都从 plugins/ 现读清单，不缓存。 */
-
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -23,7 +21,6 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
-/** 有 package.json 的插件目录（无 package.json 的残留目录另行告警）。 */
 export function plugins(): Plugin[] {
   const found: Plugin[] = [];
   for (const entry of readdirSync(PLUGINS_DIR, { withFileTypes: true })) {
@@ -37,7 +34,6 @@ export function plugins(): Plugin[] {
   return found;
 }
 
-/** plugins/ 下的所有目录名（含没有 package.json 的残留目录）。 */
 export function pluginDirNames(): string[] {
   return readdirSync(PLUGINS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())

@@ -1,21 +1,3 @@
-/**
- * plannotator-cli 三斜杠命令行为测试。
- *
- * 用 stub CLI（test/fixtures/plannotator，环境契约见 stub 头注释）替换真实
- * plannotator 二进制，验证：
- *   /pnr 参数构造与通知、/pna 路径归一化与空参、/pnl 消息选择器与 annotate-last --stdin 内容、
- *   spawn 环境透传（BROWSER/PLANNOTATOR_BROWSER 不覆盖，PLANNOTATOR_AI=disabled）、
- *   stdout 反馈 -> sendUserMessage 直接发送（无 deliverAs）、json 完整即投递（不等 exited）、
- *   超时兜底、无反馈 / CLI 报错通知。
- * 断言文案与 extensions/index.ts 逐字一致。
- *
- * 运行：cd plugins/plannotator-cli && bun test
- *
- * 机制说明：Bun.spawn 不带 env 选项时使用进程启动时的环境快照（运行期改
- * process.env 对子进程不可见）。因此这里包装 Bun.spawn，合并注入当前 process.env
- * 与插件显式 env，使逐测试的 PLANNO_STUB_* 与 PATH 前缀能送达子进程（扩展源码不改）。
- */
-
 import { deepStrictEqual, equal, ok, strictEqual } from "node:assert";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,17 +6,12 @@ import { test } from "node:test";
 
 import plannotatorCli, { resolveFeedbackTimeoutMs, type CommandCtx, type PiLike } from "../extensions/index.ts";
 
-// ── Bun.spawn 包装：合并当前 process.env 与插件显式 env ──────────────────
 const realSpawn = Bun.spawn.bind(Bun);
 Bun.spawn = ((cmd: string[], opts: Record<string, unknown> = {}) =>
 	realSpawn(cmd, {
 		...opts,
 		env: { ...process.env, ...(opts.env as Record<string, string> | undefined) },
 	})) as typeof Bun.spawn;
-
-// ============================================================================
-// Fixtures
-// ============================================================================
 
 interface TestPi extends PiLike {
 	commands: Map<
@@ -64,7 +41,6 @@ function makePi(): TestPi {
 
 type Notice = { msg: string; type: "info" | "error" };
 
-/** 选择器调用记录与回传值控制（/pnl 消息选择器的接缝）。 */
 interface SelectCall {
 	title: string;
 	options: { label: string; description?: string }[];
@@ -74,7 +50,6 @@ interface SelectCall {
 interface Ui {
 	hasUI: boolean;
 	selects: SelectCall[];
-	/** 回传被选中项的 label；默认选第一项（= 回车，即最新一条）。 */
 	pick: (call: SelectCall) => string | undefined;
 }
 
@@ -86,7 +61,6 @@ function makeUi(hasUI = true): Ui {
 	};
 }
 
-/** 取注册的命令，未注册即测试错误（Map.get 可空，此处为 fixture 内不变量）。 */
 function command(pi: TestPi, name: string) {
 	const cmd = pi.commands.get(name);
 	if (!cmd) throw new Error(`command not registered: ${name}`);
@@ -114,7 +88,6 @@ function makeCtx(
 	};
 }
 
-/** 无 getBranch 时走 getEntries 兜底分支的 ctx */
 function makeCtxNoBranch(
 	cwd: string,
 	entries: unknown[],
@@ -143,8 +116,6 @@ async function waitFor(
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		if (await fn()) return;
-		// 轮询真实时钟：等待的是子进程副作用（stub 日志/文件/投递），
-		// 进程在真实时间运行，无法用 fake timer 驱动。
 		const { promise, resolve } = Promise.withResolvers<void>();
 		setTimeout(resolve, intervalMs);
 		await promise;
@@ -152,15 +123,12 @@ async function waitFor(
 	throw new Error(`waitFor 超时 (${timeoutMs}ms)`);
 }
 
-/** 负向断言窗口：等待一段真实时间，证明"未发生"（无副作用断言）。 */
 async function expectNothingHappens(ms = 150) {
 	const { promise, resolve } = Promise.withResolvers<void>();
 	setTimeout(resolve, ms);
 	await promise;
 }
 
-// bun 的 os.tmpdir() 每次重读 TMPDIR（不缓存），故所有 scratch 挂在同一个
-// 扁平基目录下，避免上一个测试设置的 TMPDIR 导致 mkdtemp 嵌套。
 let suiteBase: string;
 function setupScratch() {
 	suiteBase ??= mkdtempSync(join(tmpdir(), "pncli-suite-"));
@@ -169,7 +137,6 @@ function setupScratch() {
 	process.env.TMPDIR = scratch;
 	process.env.HOME = join(scratch, "home");
 	Bun.env.HOME = process.env.HOME;
-	// PATH 前缀让子进程（经包装注入的 env）解析到 fixtures 里的 stub。
 	process.env.PATH = `${join(import.meta.dir, "fixtures")}:${process.env.PATH}`;
 	process.env.PLANNO_STUB_LOG = stubLog;
 	delete process.env.PLANNO_STUB_STDIN_FILE;
@@ -191,10 +158,6 @@ function assertStubLog(log: string, ...fragments: string[]) {
 	for (const f of fragments) ok(log.includes(f), `stub.log 应包含 ${f}`);
 }
 
-// ============================================================================
-// 用例 1: 工厂注册
-// ============================================================================
-
 test("注册: 恰好 pnr/pna/pnl 三个命令，description 与源码一致", () => {
 	const pi = makePi();
 	plannotatorCli(pi);
@@ -213,10 +176,6 @@ test("注册: 恰好 pnr/pna/pnl 三个命令，description 与源码一致", ()
 	);
 });
 
-// ============================================================================
-// 用例 2/3: /pnr
-// ============================================================================
-
 test("/pnr 无参: review + 无 URL 通知 + spawn env 透传", async () => {
 	const { scratch, stubLog } = setupScratch();
 	const pi = makePi();
@@ -227,7 +186,6 @@ test("/pnr 无参: review + 无 URL 通知 + spawn env 透传", async () => {
 	await waitFor(() => existsSync(stubLog));
 	const log = readFileSync(stubLog, "utf8");
 	assertStubLog(log, `cwd=${scratch}`, "arg=review");
-	// 浏览器交给 CLI 默认链：不注入 BROWSER/PLANNOTATOR_BROWSER；只默认禁用 AI 探针
 	assertStubLog(log, "env PLANNOTATOR_AI=disabled");
 	ok(!log.includes("env BROWSER=none"), "不应强制 BROWSER=none");
 	ok(!log.includes("env PLANNOTATOR_BROWSER=none"), "不应强制 PLANNOTATOR_BROWSER=none");
@@ -280,10 +238,6 @@ test("/pnr 带 URL: review + URL 参数", async () => {
 		"应发带 URL 的 info 通知",
 	);
 });
-
-// ============================================================================
-// 用例 4-9: /pna
-// ============================================================================
 
 test("/pna: annotate + --json + 目标通知", async () => {
 	const { scratch, stubLog } = setupScratch();
@@ -373,10 +327,6 @@ test("/pna 用户显式设置 PLANNOTATOR_AI 时尊重用户值", async () => {
 	assertStubLog(readFileSync(stubLog, "utf8"), "env PLANNOTATOR_AI=auto");
 });
 
-// ============================================================================
-// 用例 10-16: /pnl
-// ============================================================================
-
 test("/pnl: annotate-last --stdin --json + stdin 内容为提取文本", async () => {
 	const { scratch, stubLog } = setupScratch();
 	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
@@ -393,7 +343,6 @@ test("/pnl: annotate-last --stdin --json + stdin 内容为提取文本", async (
 		notified.some((n) => n.msg === "Opening annotation UI for last message..." && n.type === "info"),
 		"应发 info 通知",
 	);
-	// 无临时文件：消息内容直接经 stdin 传入
 	await waitFor(() => existsSync(stdinFile(scratch)));
 	equal(readFileSync(stdinFile(scratch), "utf8"), "last reply");
 });
@@ -479,8 +428,6 @@ test("/pnl 无 assistant 消息: 错误通知且无副作用", async () => {
 	);
 });
 
-// ── /pnl 消息选择器（#82）────────────────────────────────────────────────
-
 test("/pnl 多条消息: 选项倒序 + label 摘要 + 字符数 + initialIndex 0", async () => {
 	const { scratch } = setupScratch();
 	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
@@ -504,7 +451,6 @@ test("/pnl 多条消息: 选项倒序 + label 摘要 + 字符数 + initialIndex 
 		{ label: "#2 · 设计说明", description: "10 字符" },
 	]);
 
-	// 默认光标在最新一条：回车（pick 默认回传 options[0]）即旧行为
 	await waitFor(() => existsSync(stdinFile(scratch)));
 	equal(readFileSync(stdinFile(scratch), "utf8"), "短回复");
 	ok(
@@ -516,7 +462,7 @@ test("/pnl 多条消息: 选项倒序 + label 摘要 + 字符数 + initialIndex 
 test("/pnl 最多 25 条: 只列最近的 25 条，更早的不出现", async () => {
 	const { scratch } = setupScratch();
 	const ui = makeUi();
-	ui.pick = () => undefined; // 只看选项，取消即可
+	ui.pick = () => undefined;
 	const pi = makePi();
 	plannotatorCli(pi);
 	const entries = [
@@ -604,8 +550,6 @@ test("/pnl 摘要截断按码点: emoji 不被切开成乱码", async () => {
 	ui.pick = () => undefined;
 	const pi = makePi();
 	plannotatorCli(pi);
-	// 39 个 ASCII + emoji（代理对，UTF-16 下占 2 码元）+ 尾部：按码点截断到 40 时
-	// 必须整颗 emoji 保留，UTF-16 slice(0, 40) 会切出半个代理对。
 	const emojiLine = `${"x".repeat(39)}🎯尾部不该出现`;
 	const entries = [msg("assistant", "另一条"), msg("assistant", emojiLine)];
 	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, [], ui));
@@ -666,7 +610,6 @@ test("/pnl 选中 #3: stdin 为该条文本 + 前缀带序号 + 通知带序号"
 		"非最新一条的通知应带序号",
 	);
 
-	// 反馈前缀：N > 1 时指明序号，仍带"无需查找文件"的说明
 	await waitFor(() => pi.sent.length > 0);
 	ok(
 		pi.sent[0].content.startsWith(
@@ -681,7 +624,7 @@ test("/pnl Esc 取消: 不 spawn、不投递、无通知", async () => {
 	const { scratch, stubLog } = setupScratch();
 	process.env.PLANNO_STUB_STDIN_FILE = stdinFile(scratch);
 	const ui = makeUi();
-	ui.pick = () => undefined; // Esc
+	ui.pick = () => undefined;
 	const pi = makePi();
 	plannotatorCli(pi);
 	const notified: Notice[] = [];
@@ -740,10 +683,6 @@ test("/pnl 无 UI 的宿主（hasUI=false）: 报错且不 spawn、不弹选择�
 	);
 });
 
-// ============================================================================
-// 用例 17-24: 反馈回路与失败路径
-// ============================================================================
-
 test("stdout 反馈 -> sendUserMessage 直接发送（省略 deliverAs，空闲即触发回合）", async () => {
 	const { scratch } = setupScratch();
 	process.env.PLANNO_STUB_STDOUT = "请修复 X";
@@ -753,8 +692,6 @@ test("stdout 反馈 -> sendUserMessage 直接发送（省略 deliverAs，空闲�
 	command(pi, "pna").handler("docs.md", makeCtx(scratch, [], notified));
 
 	await waitFor(() => pi.sent.length > 0);
-	// 不带 deliverAs：若带 "followUp"，omp 只入队不启动回合，反馈会静默滞留到
-	// 下一条显式输入（实测缺陷）；省略后空闲路径直接 prompt() 触发回合。
 	deepStrictEqual(pi.sent[0], { content: "请修复 X", opts: undefined });
 	ok(!notified.some((n) => n.type === "error"), "不应有错误通知");
 });
@@ -769,8 +706,6 @@ test("/pnl 反馈投递: 前缀说明这是对上一条助手消息的反馈", a
 	command(pi, "pnl").handler(undefined, makeCtx(scratch, entries, notified));
 
 	await waitFor(() => pi.sent.length > 0);
-	// 反馈必须带 framing 前缀：明确告诉 AI 这是对它上一条消息的标注反馈，
-	// 而非让 AI 对着一个不存在的文件猜"文件在哪"。
 	ok(
 		pi.sent[0].content.startsWith(
 			"这是对你上一条助手消息的标注反馈，请直接处理，无需查找文件。",
@@ -783,13 +718,12 @@ test("/pnl 反馈投递: 前缀说明这是对上一条助手消息的反馈", a
 test("json 完整即投递: stdout 有完整 JSON 但进程挂起时不等 exited", async () => {
 	const { scratch } = setupScratch();
 	process.env.PLANNO_STUB_STDOUT = '{"decision":"annotated","feedback":"json 完整即投递"}';
-	process.env.PLANNO_STUB_HANG = "1"; // 输出 JSON 后挂起（关闭期挂起模拟）
+	process.env.PLANNO_STUB_HANG = "1";
 	const pi = makePi();
 	plannotatorCli(pi);
 	const notified: Notice[] = [];
 	command(pi, "pna").handler("docs.md", makeCtx(scratch, [], notified));
 
-	// 不等 exited：JSON 一完整反馈立即投递
 	await waitFor(() => pi.sent.length > 0, 2000);
 	deepStrictEqual(pi.sent[0], { content: "json 完整即投递", opts: undefined });
 	ok(!notified.some((n) => n.type === "error"), "不应有错误通知");
@@ -797,21 +731,20 @@ test("json 完整即投递: stdout 有完整 JSON 但进程挂起时不等 exite
 
 test("挂起时非 JSON stdout 走超时兜底投递", async () => {
 	const { scratch } = setupScratch();
-	process.env.PLANNO_STUB_STDOUT = "部分反馈文本"; // 非 JSON（/pnr 纯文本场景）
+	process.env.PLANNO_STUB_STDOUT = "部分反馈文本";
 	process.env.PLANNO_STUB_HANG = "1";
 	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "200";
 	const pi = makePi();
 	plannotatorCli(pi);
 	command(pi, "pnr").handler(undefined, makeCtx(scratch, [], []));
 
-	// timeout 兜底：stdout 已有内容（关闭期挂起场景），kill 后仍投递
 	await waitFor(() => pi.sent.length > 0, 3000);
 	deepStrictEqual(pi.sent[0], { content: "部分反馈文本", opts: undefined });
 });
 
 test("超时无输出: error 通知提示重试", async () => {
 	const { scratch } = setupScratch();
-	process.env.PLANNO_STUB_HANG = "1"; // 无 stdout 挂起
+	process.env.PLANNO_STUB_HANG = "1";
 	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "200";
 	const pi = makePi();
 	plannotatorCli(pi);
@@ -870,7 +803,6 @@ test("正常退出无反馈: closed (no feedback) info 通知", async () => {
 	const notified: Notice[] = [];
 	command(pi, "pna").handler("docs.md", makeCtx(scratch, [], notified));
 
-	// Opening 通知也是 info，需精确匹配 closed 消息
 	await waitFor(
 		() => notified.some((n) => n.msg === "Annotation closed (no feedback)."),
 		3000,
@@ -882,9 +814,6 @@ test("正常退出无反馈: closed (no feedback) info 通知", async () => {
 	equal(pi.sent.length, 0, "无反馈不应投递");
 });
 
-// ── resolveFeedbackTimeoutMs: 默认值与 env 解析（回归保护：防 120s 默认值再现）──
-
-/** 临时设置环境变量，测试后恢复原值（含未设状态）。 */
 function withEnv(name: string, value: string | undefined, fn: () => void): void {
 	const saved = process.env[name];
 	try {

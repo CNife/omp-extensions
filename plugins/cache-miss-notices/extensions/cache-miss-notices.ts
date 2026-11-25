@@ -1,24 +1,7 @@
-/**
- * cache-miss-notices — 显著的 prompt-cache miss 即时通知。
- *
- * 移植自 pi 的 showCacheMissNotices（packages/coding-agent/src/core/cache-stats.ts）。
- * 每条 assistant 消息结束时检测：如果本应命中缓存的 token 被重新计费且超过阈值，
- * 弹出一条 warning toast，告知浪费的 token 数和估算费用。
- *
- * 安装即启用，无需配置。
- */
-
-// ============================================================================
-// Detection (ported from pi cache-stats.ts)
-// ============================================================================
-
-/** Prompt-cache TTL: idle gaps longer than this are worth mentioning. */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-/** Per-turn misses at or below this are cache breakpoint granularity noise. */
 const NOISE_FLOOR_TOKENS = 1024;
 
-/** Significance thresholds for showing a notice. */
 const NOTICE_MIN_TOKENS = 20_000;
 const NOTICE_MIN_COST = 0.1;
 
@@ -33,14 +16,6 @@ interface PreviousRequest {
   promptTokens: number;
   modelKey: string;
   timestamp: number;
-  /**
-   * Sticky, but only within the same modelKey: some earlier request on this
-   * model reported cache activity. Distinguishes a total miss on a
-   * cache-read-only provider from a model that never reports caching at all.
-   * Unlike pi (which sticks across the whole scan), the flag does NOT survive
-   * a model switch: a model that never reports cache usage would otherwise be
-   * misreported as a full miss on every turn after the switch.
-   */
   reportedCache: boolean;
 }
 
@@ -107,20 +82,6 @@ function asPreviousRequest(
   };
 }
 
-/**
- * Scan entries to find the previous request context, then detect a miss on
- * the just-completed message.
- *
- * Unlike pi (where message_end fires before persistence), omp persists the
- * message BEFORE emitting to extensions - so `entries` already contains
- * `msg`. We skip it by reference to avoid comparing the message against
- * itself.
- *
- * `reportedCache` is inherited only along a same-model chain: crossing a
- * model boundary restarts it, so switching to a model that never reports
- * cache usage counts at most the first post-switch turn (the model switch
- * itself) instead of misreporting every turn as a full miss.
- */
 export function detectCacheMiss(
   entries: readonly { type: string; message?: unknown }[],
   msg: AssistantLike,
@@ -136,7 +97,6 @@ export function detectCacheMiss(
     if (entry.type !== "message") continue;
     const m = entry.message as { role: string } & Partial<AssistantLike> | undefined;
     if (!m || m.role !== "assistant" || !m.usage) continue;
-    // Skip the current message (already persisted by omp before emit).
     if (m === msg) continue;
     const modelKey = `${m.provider}/${m.model}`;
     const inheritCache = prev?.modelKey === modelKey ? prev.reportedCache : false;
@@ -145,10 +105,6 @@ export function detectCacheMiss(
 
   return detectMiss(prev, msg, cacheReadPricePerMillion);
 }
-
-// ============================================================================
-// Formatting
-// ============================================================================
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -168,16 +124,10 @@ export function formatNotice(miss: CacheMiss): string {
   return `${label}: ${reBilled}`;
 }
 
-// ============================================================================
-// Extension entry
-// ============================================================================
-
-/** message_end 事件里本插件读到的字段。 */
 interface MessageEndEvent {
   message: { role: string } & Partial<AssistantLike>;
 }
 
-/** 本插件用到的会话上下文字段（宿主 API 未打进本仓类型检查，故在此声明最小面）。 */
 interface MessageEndContext {
   model?: { cost?: { cacheRead?: number } };
   sessionManager: { getEntries(): readonly { type: string; message?: unknown }[] };
@@ -194,7 +144,6 @@ export default function cacheMissNotices(pi: any) {
     const msg = message as unknown as AssistantLike;
     if (!msg.usage) return;
 
-    // Fallback cacheRead price from the current model's catalog entry.
     const model = ctx.model;
     const cacheReadPrice = model?.cost?.cacheRead ?? 0;
 

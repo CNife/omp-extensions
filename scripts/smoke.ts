@@ -1,16 +1,4 @@
 #!/usr/bin/env bun
-/**
- * 本地冒烟：把每个扩展插件的入口用 `omp --no-extensions -e <entry>` 真加载一次。
- *
- * 判定（退出码不可信：加载失败时 omp 仍返回 0，见 docs/adr/0005-extension-smoke-load.md）：
- *   - stdout 出现 rpc ready
- *   - stderr 不含 "Failed to load extension"
- *   - 入口源码里 registerCommand("<字面名>") 的命令名都出现在 available_commands_update 中
- *
- * 跑的是用户 PATH 上的 omp（插件真正加载进去的那个），不是本仓 node_modules 里的 omp CLI：
- * `bun run` 会把 `node_modules/.bin` 前置到 PATH，那里有 devDependency `@oh-my-pi/pi-coding-agent`
- * 的 npm 版 `omp`（`dist/cli.js`），跟用户装的 omp 不是同一个东西。仅技能插件没有可加载的入口，跳过。
- */
 
 import { existsSync, readFileSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
@@ -20,7 +8,6 @@ import { plugins, ROOT } from "./plugins.ts";
 const LOAD_FAILURE = "Failed to load extension";
 const TIMEOUT_MS = 60_000;
 
-/** 用户 PATH 上的 omp；剔掉本仓的 `node_modules/.bin`（那里是 devDependency 的 npm CLI）。 */
 function resolveOmp(): string {
   const bin = resolve(join(ROOT, "node_modules", ".bin"));
   const path = (process.env.PATH ?? "")

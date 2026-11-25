@@ -1,19 +1,6 @@
-/**
- * nmem REST 传输 characterization 测试。
- *
- * 拆分（spec #103）前的行为快照：经注入的 fake fetch 断言 nmemRequest 的
- * 外部可观察行为——重试、错误映射、backoff、超时、错误详情提取。
- * 计时通过临时替换全局 setTimeout 实现（fake timer），测试后恢复；
- * 生产代码不含 sleep/now seam。不 mock 内部协作对象、不断言内部函数被调用。
- */
-
 import { deepStrictEqual, ok, strictEqual } from "node:assert";
 import { test } from "node:test";
 import { nmemRequest } from "../extensions/rest.ts";
-
-// ============================================================================
-// Fixtures
-// ============================================================================
 
 const FAKE_API_URL = "http://nmem.test:9999";
 
@@ -24,7 +11,6 @@ interface FetchCall {
 
 type GlobalFetch = typeof globalThis.fetch;
 
-/** 依次返回给定结果的 fake fetch（每次调用消耗一个；耗尽后重复最后一个）。 */
 function scriptedFetch(outcomes: Array<() => Response>) {
 	const calls: FetchCall[] = [];
 	const fetch = async (url: string | URL, init: RequestInit = {}) => {
@@ -41,12 +27,10 @@ function jsonResponse(status: number, body: unknown): Response {
 	});
 }
 
-/** 一直返回同一状态码 JSON 响应的 fake fetch。 */
 function statusFetch(status: number, body: unknown = {}) {
 	return scriptedFetch([() => jsonResponse(status, body)]);
 }
 
-/** 拒绝的 fake fetch（网络不可达模拟）。 */
 function rejectingFetch(error: unknown) {
 	const calls: FetchCall[] = [];
 	const fetch = async (url: string | URL, init: RequestInit = {}) => {
@@ -56,7 +40,6 @@ function rejectingFetch(error: unknown) {
 	return { fetch: fetch as unknown as GlobalFetch, calls };
 }
 
-/** 挂起直到请求被 abort 的 fake fetch（超时模拟，Promise 永不 resolve）。 */
 function hangingFetch() {
 	const calls: FetchCall[] = [];
 	const fetch = (url: string | URL, init: RequestInit = {}) => {
@@ -81,15 +64,6 @@ interface FakeTimers {
 	restore: () => void;
 }
 
-/**
- * 临时替换全局 setTimeout：记录每次延迟。clearTimeout 不替换：
- * 原生实现对伪造句柄是 no-op，迟到的 abort 在响应已返回后无害。
- * 回调经微任务立即触发（无真实等待）：
- * - 默认只触发短延迟定时器（backoff ≤ 4000，小于 8000ms 超时）——
- *   否则超时 abort 会抢先于网络错误，backend_unreachable 被误映射为 timeout；
- * - fireAll: true 额外触发 8000ms 超时定时器，供超时用例驱动 abort。
- * 返回记录并负责恢复。
- */
 function fakeTimers(opts: { fireAll?: boolean } = {}): FakeTimers {
 	const timers: FakeTimerHandle[] = [];
 	const original = globalThis.setTimeout;
@@ -108,7 +82,6 @@ function fakeTimers(opts: { fireAll?: boolean } = {}): FakeTimers {
 	};
 }
 
-/** 固定 nmem 配置（env 优先级最高），返回恢复函数。 */
 function useFakeConfig() {
 	const savedUrl = process.env.NMEM_API_URL;
 	const savedKey = process.env.NMEM_API_KEY;
@@ -126,7 +99,6 @@ interface FixtureContext {
 	timers: FakeTimers;
 }
 
-/** 统一夹具：fake config + fake timers，finally 恢复两者。 */
 async function withFixtures(
 	fn: (ctx: FixtureContext) => Promise<void>,
 	timerOpts: { fireAll?: boolean } = {},
@@ -141,7 +113,6 @@ async function withFixtures(
 	}
 }
 
-/** NmemError 类型守卫：只暴露测试关心的 code / status 面。 */
 function isNmemError(
 	error: unknown,
 ): error is Error & { code: string; status?: number } {
@@ -155,7 +126,6 @@ interface RequestArgs {
 	options?: { fetch?: typeof fetch };
 }
 
-/** 运行 nmemRequest，捕获并返回抛出的 NmemError（不断言则失败）。 */
 async function requestExpectingError(
 	method: RequestArgs["method"],
 	path: string,
@@ -171,10 +141,6 @@ async function requestExpectingError(
 	ok(isNmemError(threw), `期望 NmemError，实际：${threw}`);
 	return threw;
 }
-
-// ============================================================================
-// fetch 注入 seam
-// ============================================================================
 
 test("nmemRequest: 不传 options 时使用全局 fetch", async () => {
 	const restoreEnv = useFakeConfig();
@@ -242,10 +208,6 @@ test("nmemRequest: 无 body 时不带 Content-Type", async () => {
 	}
 });
 
-// ============================================================================
-// 瞬时故障触发重试（timeout / backend_unreachable / server_error）
-// ============================================================================
-
 test("nmemRequest: timeout 重试后成功", async () => {
 	await withFixtures(async () => {
 		const hanging = hangingFetch();
@@ -289,7 +251,7 @@ test("nmemRequest: server_error (500) 重试至上限 3 次后抛出", async () 
 		const threw = await requestExpectingError("GET", "/threads", undefined, { fetch });
 		strictEqual(threw.code, "server_error");
 		strictEqual(threw.status, 500);
-		strictEqual(calls.length, 3); // MAX_RETRIES=2 → 首次 + 2 次重试
+		strictEqual(calls.length, 3);
 	});
 });
 
@@ -302,10 +264,6 @@ test("nmemRequest: 其他 5xx（503）同样按 server_error 重试至上限", a
 		strictEqual(calls.length, 3);
 	});
 });
-
-// ============================================================================
-// 不可重试错误码：一次调用即抛
-// ============================================================================
 
 test("nmemRequest: 401 unauthorized 不重试", async () => {
 	await withFixtures(async () => {
@@ -357,16 +315,11 @@ test("nmemRequest: 其余 4xx（403）按现状映射 server_error 并重试至�
 	});
 });
 
-// ============================================================================
-// backoff（fake timer：只看延迟数值，无真实等待）
-// ============================================================================
-
 test("nmemRequest: backoff 延迟按指数上限递增且受 BACKOFF_CAP_MS=4000 触顶约束", async () => {
 	await withFixtures(async ({ timers }) => {
 		const { fetch } = statusFetch(500, {});
 		await requestExpectingError("GET", "/threads", undefined, { fetch });
-		const delays = timers.delays().filter((d) => d < 8000); // 排除每轮尝试的 8000ms 超时定时器
-		// 2 次重试 → 2 个 backoff；上限 Math.min(500 * 2^attempt, 4000) → 500 / 1000
+		const delays = timers.delays().filter((d) => d < 8000);
 		strictEqual(delays.length, 2);
 		ok(delays[0] >= 0 && delays[0] < 500, `delay[0]=${delays[0]} 应落在 [0, 500)`);
 		ok(delays[1] >= 0 && delays[1] < 1000, `delay[1]=${delays[1]} 应落在 [0, 1000)`);
@@ -379,17 +332,12 @@ test("nmemRequest: 不重试的失败不产生 backoff", async () => {
 	await withFixtures(async ({ timers }) => {
 		const { fetch } = statusFetch(401, {});
 		await requestExpectingError("GET", "/threads", undefined, { fetch });
-		// 单次尝试仍设一个 8000ms 超时定时器，但没有任何 backoff 定时器（< 8000）
 		deepStrictEqual(
 			timers.delays().filter((d) => d < 8000),
 			[],
 		);
 	});
 });
-
-// ============================================================================
-// 超时中止
-// ============================================================================
 
 test("nmemRequest: 超时以 AbortSignal 中止请求并映射 timeout，定时器为 8000ms", async () => {
 	await withFixtures(async ({ timers }) => {
@@ -398,8 +346,7 @@ test("nmemRequest: 超时以 AbortSignal 中止请求并映射 timeout，定时�
 		strictEqual(threw.code, "timeout");
 		strictEqual(threw.message, "[timeout] request aborted after 8000ms");
 		strictEqual(threw.status, undefined);
-		strictEqual(calls.length, 3); // timeout 可重试 → 3 次尝试
-		// 每次尝试各设一个 8000ms 超时定时器，两次重试间各夹一个 backoff
+		strictEqual(calls.length, 3);
 		const delays = timers.delays();
 		strictEqual(delays.length, 5);
 		deepStrictEqual(
@@ -409,10 +356,6 @@ test("nmemRequest: 超时以 AbortSignal 中止请求并映射 timeout，定时�
 		ok(delays[1] < 1000 && delays[3] < 1000, `backoff 延迟 ${delays[1]}/${delays[3]} 应小于 1000`);
 	}, { fireAll: true });
 });
-
-// ============================================================================
-// 错误详情提取
-// ============================================================================
 
 test("nmemRequest: 响应体 detail 字段优先进 NmemError", async () => {
 	await withFixtures(async () => {
@@ -458,10 +401,6 @@ test("nmemRequest: backend_unreachable 的详情取自底层错误 message", asy
 		strictEqual(threw.message, "[backend_unreachable] fetch failed");
 	});
 });
-
-// ============================================================================
-// URL 拼接（apiUrl 尾斜杠剥离）
-// ============================================================================
 
 test("nmemRequest: apiUrl 尾斜杠被剥离后拼接 path", async () => {
 	const restoreEnv = useFakeConfig();
