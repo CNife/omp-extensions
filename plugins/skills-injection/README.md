@@ -27,12 +27,12 @@ omp plugin link ./plugins/skills-injection
 
 ## 使用
 
-输入 `/inject-skills` 打开设置列表（与 `/settings`、`/tools` 同款交互）：
+输入 `/inject-skills` 打开 omp 原生勾选列表（`ctx.ui.select`，行多时自带 `Type to search`）：
 
 - `↑↓` 导航
-- 输入字符模糊筛选技能名
-- `Space` / `Enter` 切换 `enabled` / `disabled`（即时保存）
-- `Esc` 关闭
+- 直接打字搜索技能名
+- `Enter` 勾选/取消 `enabled` / `disabled`（即时保存；列表重开并回到刚切的那一行）
+- `Esc` 或末尾 `Done selecting` 行关闭
 
 语义：
 
