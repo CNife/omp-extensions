@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import { countCommentLines } from "./comments.ts";
 import { plugins, pluginDirNames, ROOT } from "./plugins.ts";
 
 const MARKETPLACE_PATH = join(ROOT, ".omp-plugin/marketplace.json");
@@ -105,14 +106,71 @@ function checkSkillLinks(): void {
   }
 }
 
-function filesUnder(dir: string, prefix = ""): string[] {
+function filesUnder(dir: string, prefix = "", skip: (name: string) => boolean = () => false): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) found.push(...filesUnder(join(dir, entry.name), path));
-    else found.push(path);
+    if (entry.isDirectory()) {
+      if (!skip(entry.name)) found.push(...filesUnder(join(dir, entry.name), path, skip));
+    } else {
+      found.push(path);
+    }
   }
   return found;
+}
+
+const COMMENT_BUDGET_PATH = join(ROOT, "scripts/comment-budget.json");
+
+function sourceFiles(): string[] {
+  const files: string[] = [];
+  for (const plugin of plugins()) {
+    for (const dir of ["extensions", "test"]) {
+      const base = join(plugin.dir, dir);
+      if (!existsSync(base)) continue;
+      for (const file of filesUnder(base, "", (name) => name === "node_modules" || name === "fixtures")) {
+        if (!file.endsWith(".ts")) continue;
+        files.push(`plugins/${plugin.name}/${dir}/${file}`);
+      }
+    }
+  }
+  for (const file of filesUnder(join(ROOT, "scripts"))) {
+    if (file.endsWith(".ts")) files.push(`scripts/${file}`);
+  }
+  return files.sort();
+}
+
+function checkComments(): void {
+  const budget = existsSync(COMMENT_BUDGET_PATH)
+    ? readJson<{ budgets?: Record<string, number> }>(COMMENT_BUDGET_PATH)
+    : {};
+  const budgets = budget.budgets ?? {};
+  const current: Record<string, number> = {};
+  for (const file of sourceFiles()) {
+    const count = countCommentLines(readFileSync(join(ROOT, file), "utf8"));
+    if (count > 0) current[file] = count;
+  }
+
+  let violation = false;
+  for (const [file, count] of Object.entries(current)) {
+    const allowed = budgets[file] ?? 0;
+    if (count > allowed) {
+      violation = true;
+      errors.push(
+        `${file}: ${count} 行注释，预算 ${allowed}。注释只有两个去处：删掉，或写进 docs/adr/；删除后可用 COMMENT_BUDGET_UPDATE=1 bun scripts/check.ts 收紧基线`,
+      );
+    }
+  }
+
+  if (process.env.COMMENT_BUDGET_UPDATE !== "1" || violation) return;
+  const next: Record<string, number> = {};
+  for (const [file, count] of Object.entries(current)) {
+    if (count <= (budgets[file] ?? 0)) next[file] = count;
+  }
+  const nextJson = `${JSON.stringify({ budgets: next }, null, 2)}\n`;
+  if (nextJson !== readFileSync(COMMENT_BUDGET_PATH, "utf8")) {
+    writeFileSync(COMMENT_BUDGET_PATH, nextJson);
+    console.log(`注释预算基线已收紧：${COMMENT_BUDGET_PATH}`);
+  }
 }
 
 function compareVersion(a: [number, number, number], b: [number, number, number]): number {
@@ -183,6 +241,7 @@ if (base !== undefined && staged) throw new Error("--base 与 --staged 互斥");
 checkManifests();
 checkSkills();
 checkSkillLinks();
+checkComments();
 if (base !== undefined || staged) {
   checkVersions(base ?? "HEAD", staged);
 }

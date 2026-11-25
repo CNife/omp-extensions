@@ -14,7 +14,7 @@ CNife 的 [OMP](https://omp.dev) (Oh My Pi) agent 扩展集合，以 marketplace
 ### 本地开发
 
 ```bash
-bun install && bun run check   # 测试 + 类型检查 + 清单/版本/技能检查
+bun install && bun run check   # 测试 + 类型检查 + 清单/版本/技能/注释预算检查
 bun run smoke                  # 用 `omp -e` 真加载每个扩展入口
 ```
 

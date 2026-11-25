@@ -38,11 +38,12 @@ omp-extensions/
 
 ```bash
 bun install        # 首次：装根 devDeps，并自动把 core.hooksPath 设成 .githooks
-bun run check      # bun test + tsc --noEmit + 清单/版本/技能 frontmatter 检查
+bun run check      # bun test + tsc --noEmit + 清单/版本/技能 frontmatter/注释预算检查
 bun run smoke      # 逐个扩展入口用 `omp --no-extensions -e <entry>` 真加载
 ```
 
 - pre-commit hook 跑 `check:staged`（版本递增按暂存内容比对）；CI 跑同一个 `check`，并对 PR 额外比对 base。
+- 注释预算：每文件默认 0 行，新增注释即失败（注释只有删掉或写进 `docs/adr/` 两条路）；删注释后用 `COMMENT_BUDGET_UPDATE=1 bun scripts/check.ts` 收紧 `scripts/comment-budget.json`，预算只降不升。
 - 判定冒烟结果看 **stderr 无 `Failed to load extension`** 且命令出现在 `available_commands_update` 里——**omp 加载失败的退出码仍是 0**。为什么不用 `--plugin-dir`（它对插件目录静默不加载）见 [ADR 0005](docs/adr/0005-extension-smoke-load.md)。
 - 根 `package.json` 的 `@oh-my-pi/pi-coding-agent` / `@oh-my-pi/pi-tui` devDeps 是对扩展盖章的 API 面，**跟当前 omp 主版本走**：升级 omp 后同步 bump 再跑 `bun run check`，否则 `tsc` 校验的是旧版 API，`DynamicBorder` 这类被删导出的扩展会一直绿到真加载才炸（[ADR 0008](docs/adr/0008-extension-ui-select-checkbox.md)）。
 - 冒烟跑的是 **PATH 上的 omp**（脚本剔掉 `node_modules/.bin`）：`bun run` 会把它前置到 PATH，那里有 devDependency 自带的 npm 版 `omp`，跟用户装的 omp 不是同一个东西，拿它冒烟等于验错版本。
