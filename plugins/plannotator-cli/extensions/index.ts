@@ -92,6 +92,71 @@ function notifyPlannotatorError(ctx: CommandCtx, label: string, err: unknown): v
   }
 }
 
+const KILL_GRACE_MS = 3000;
+
+function isExitedProcessError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === "EPIPE" || code === "ESRCH";
+}
+
+function warnSuppressed(where: string, err: unknown): void {
+  if (isExitedProcessError(err)) return;
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn(`[plannotator] ${where}: ${message}`);
+}
+
+function hasExited(proc: Bun.Subprocess): boolean {
+  return proc.exitCode !== null || proc.signalCode !== null;
+}
+
+function killIfRunning(proc: Bun.Subprocess, where: string): void {
+  if (hasExited(proc)) return;
+  try {
+    proc.kill("SIGKILL");
+  } catch (err) {
+    warnSuppressed(where, err);
+  }
+}
+
+async function waitForExit(proc: Bun.Subprocess, ms: number): Promise<boolean> {
+  if (hasExited(proc)) return true;
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const timer = setTimeout(() => resolve(false), ms);
+  try {
+    return await Promise.race([proc.exited.then(() => true), promise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function releaseProcess(proc: Bun.Subprocess, label: string): Promise<void> {
+  if (await waitForExit(proc, KILL_GRACE_MS)) return;
+  if (hasExited(proc)) return;
+  console.warn(
+    `[plannotator] ${label}: still running ${KILL_GRACE_MS}ms after the decision; killing the process`,
+  );
+  killIfRunning(proc, `${label} kill`);
+}
+
+function writeStdin(proc: Bun.Subprocess, input: string, label: string): void {
+  const sink = proc.stdin;
+  if (typeof sink !== "object" || sink === null) return;
+  try {
+    sink.write(input);
+  } catch (err) {
+    warnSuppressed(`${label} stdin write`, err);
+  }
+  try {
+    sink.end();
+  } catch (err) {
+    warnSuppressed(`${label} stdin close`, err);
+  }
+}
+
+function drainStderr(stderrP: Promise<string>, label: string): void {
+  void stderrP.catch((err) => warnSuppressed(`${label} stderr read`, err));
+}
+
 async function runPlannotator(
   pi: PiLike,
   ctx: CommandCtx,
@@ -118,14 +183,7 @@ async function runPlannotator(
   const stderrStream = proc.stderr as ReadableStream<Uint8Array>;
 
   if (opts.stdin !== undefined) {
-    try {
-      const stdinSink = proc.stdin;
-      if (typeof stdinSink === "object" && stdinSink !== null) {
-        stdinSink.write(opts.stdin);
-        stdinSink.end();
-      }
-    } catch {
-    }
+    writeStdin(proc, opts.stdin, opts.label);
   }
 
   const stderrP = new Response(stderrStream).text();
@@ -164,11 +222,8 @@ async function runPlannotator(
     ]);
 
     if (winner === "timeout") {
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-      }
-      void stderrP.catch(() => {});
+      killIfRunning(proc, `${opts.label} kill`);
+      drainStderr(stderrP, opts.label);
       const feedback = extractFeedback(stdoutText, opts.json === true);
       if (feedback) {
         deliver(pi, feedback, opts.feedbackPrefix);
@@ -182,30 +237,25 @@ async function runPlannotator(
     }
 
     if (winner === "json") {
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-      }
-      void stderrP.catch(() => {});
       const feedback = extractFeedback(stdoutText, true);
       if (feedback) {
         deliver(pi, feedback, opts.feedbackPrefix);
       } else {
         ctx.ui.notify(`${opts.label} closed (no feedback).`, "info");
       }
+      await releaseProcess(proc, opts.label);
+      drainStderr(stderrP, opts.label);
       return;
     }
 
-    const exited = await Promise.race([
-      exitedP.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 3000)),
-    ]);
-    if (!exited) {
-      try {
-        proc.kill("SIGKILL");
-      } catch {
+    if (!(await waitForExit(proc, KILL_GRACE_MS))) {
+      if (!hasExited(proc)) {
+        console.warn(
+          `[plannotator] ${opts.label}: still running after stdout closed; killing the process`,
+        );
       }
-      void stderrP.catch(() => {});
+      killIfRunning(proc, `${opts.label} kill`);
+      drainStderr(stderrP, opts.label);
       const feedback = extractFeedback(stdoutText, opts.json === true);
       if (feedback) {
         deliver(pi, feedback, opts.feedbackPrefix);
@@ -215,7 +265,12 @@ async function runPlannotator(
       return;
     }
 
-    const stderr = await stderrP.catch(() => "");
+    let stderr = "";
+    try {
+      stderr = await stderrP;
+    } catch (err) {
+      warnSuppressed(`${opts.label} stderr read`, err);
+    }
     const exitCode = await exitedP;
     const feedback = extractFeedback(stdoutText, opts.json === true);
     if (exitCode !== 0 && !feedback) {

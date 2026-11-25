@@ -59,11 +59,14 @@ Esc 取消则什么都不发生，只有一条可选消息时不弹列表。宿�
    用户显式配置原样透传。旧版曾强制设 `none` 规避 v0.26.7 的关闭期挂起，但该值在当时是
    no-op（抑制组并未抑制，0/89 与 3/80 无统计差异），且 v0.28.22 起 CLI 会把它解读为
    “不打开”，故移除。需要静默时请自行设 `PLANNOTATOR_BROWSER=none`。
-2. **stdout JSON 完整即成功**：`/pna` `/pnl` 读到完整决策 JSON 立即投递反馈并回收进程，不等
-   `exited`，残余挂起对用户体验零影响。
+2. **stdout JSON 完整即成功**：`/pna` `/pnl` 读到完整决策 JSON 立即投递反馈，不等 `exited`；
+   上游写完决策紧接着就退出，插件最多再等 3 秒，仍不退才强杀并留痕。
 3. **超时兜底**：默认 30min（环境变量 `PLANNOTATOR_FEEDBACK_TIMEOUT_MS` 可覆盖），到点 kill
-   进程；若 stdout 已有内容仍投递，否则通知用户重试。
-4. **`PLANNOTATOR_AI=disabled` 默认注入**：避免 CLI 派生嵌套 `pi --mode rpc` 子进程（AI 模型
+   进程；若 stdout 已有内容仍投递，否则通知用户重试。不开 `--gate` 时上游没有空闲超时，这是
+   会话唯一的收尾闸。
+4. **子进程错误留痕**：写 stdin、强制结束、读 stderr 失败时，只把「进程已退出」类（EPIPE /
+   ESRCH）当正常，其余打 `console.warn`，不打断反馈投递。
+5. **`PLANNOTATOR_AI=disabled` 默认注入**：避免 CLI 派生嵌套 `pi --mode rpc` 子进程（AI 模型
    发现探针）；用户显式设置 `PLANNOTATOR_AI` 时尊重用户值。
 
 ## 测试
@@ -74,4 +77,4 @@ cd plugins/plannotator-cli && bun test
 
 用 stub CLI 替换真实二进制，覆盖：命令注册、参数构造、路径归一化、stdin 内容、消息选择器
 （选项构造、选中项 → stdin 映射、取消、单条跳过、非交互报错）、spawn 环境强制项、反馈直接
-投递（无 deliverAs）、json 完整即投递、超时兜底、错误与无反馈通知。
+投递（无 deliverAs）、json 完整即投递、超时兜底、错误与无反馈通知、非预期子进程错误留痕。

@@ -158,6 +158,61 @@ function assertStubLog(log: string, ...fragments: string[]) {
 	for (const f of fragments) ok(log.includes(f), `stub.log 应包含 ${f}`);
 }
 
+function textStream(text: string) {
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			if (text) controller.enqueue(new TextEncoder().encode(text));
+			controller.close();
+		},
+	});
+}
+
+function openStream() {
+	return new ReadableStream<Uint8Array>({ start() {} });
+}
+
+function fakeProc(options: {
+	stdout?: ReadableStream<Uint8Array>;
+	stdin?: { write(chunk: string): unknown; end(): unknown };
+	kill?: () => void;
+	exited?: Promise<number>;
+	exitCode?: number | null;
+}) {
+	return {
+		stdout: options.stdout ?? textStream(""),
+		stderr: textStream(""),
+		stdin: options.stdin,
+		exited: options.exited ?? Promise.resolve(0),
+		exitCode: options.exitCode === undefined ? 0 : options.exitCode,
+		signalCode: null,
+		kill: options.kill ?? (() => {}),
+	};
+}
+
+async function withSpawn(factory: () => unknown, fn: () => Promise<void>): Promise<void> {
+	const original = Bun.spawn;
+	Bun.spawn = (() => factory()) as unknown as typeof Bun.spawn;
+	try {
+		await fn();
+	} finally {
+		Bun.spawn = original;
+	}
+}
+
+async function captureWarns(fn: () => Promise<void>): Promise<string[]> {
+	const warns: string[] = [];
+	const original = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warns.push(args.map((arg) => String(arg)).join(" "));
+	};
+	try {
+		await fn();
+	} finally {
+		console.warn = original;
+	}
+	return warns;
+}
+
 test("注册: 恰好 pnr/pna/pnl 三个命令，description 与源码一致", () => {
 	const pi = makePi();
 	plannotatorCli(pi);
@@ -762,6 +817,79 @@ test("超时无输出: error 通知提示重试", async () => {
 		"应发超时错误通知",
 	);
 	equal(pi.sent.length, 0, "无反馈不应投递");
+});
+
+test("stdin 非预期写入错误: 留痕且反馈照常投递", async () => {
+	const { scratch } = setupScratch();
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const failure = Object.assign(new Error("bad file descriptor"), { code: "EBADF" });
+
+	const warns = await captureWarns(() =>
+		withSpawn(
+			() =>
+				fakeProc({
+					stdin: {
+						write() {
+							throw failure;
+						},
+						end() {},
+					},
+					stdout: textStream('{"decision":"annotated","feedback":"仍要投递"}'),
+				}),
+			async () => {
+				command(pi, "pnl").handler(
+					undefined,
+					makeCtx(scratch, [msg("assistant", "last reply")], notified),
+				);
+				await waitFor(() => pi.sent.length > 0);
+			},
+		),
+	);
+
+	ok(pi.sent[0]?.content.endsWith("仍要投递"), "反馈应照常投递");
+	ok(
+		warns.some((w) => w.startsWith("[plannotator] Annotation stdin write")),
+		`非预期 stdin 错误应留痕，实际 ${JSON.stringify(warns)}`,
+	);
+});
+
+test("kill 非预期失败: 留痕且超时提示照常发出", async () => {
+	const { scratch } = setupScratch();
+	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "50";
+	const pi = makePi();
+	plannotatorCli(pi);
+	const notified: Notice[] = [];
+	const failure = Object.assign(new Error("permission denied"), { code: "EACCES" });
+	const { promise: neverExit } = Promise.withResolvers<number>();
+
+	const warns = await captureWarns(() =>
+		withSpawn(
+			() =>
+				fakeProc({
+					stdout: openStream(),
+					exited: neverExit,
+					exitCode: null,
+					kill() {
+						throw failure;
+					},
+				}),
+			async () => {
+				command(pi, "pna").handler("docs.md", makeCtx(scratch, [], notified));
+				await waitFor(() => notified.some((n) => n.type === "error"), 3000);
+			},
+		),
+	);
+
+	ok(
+		warns.some((w) => w.startsWith("[plannotator] Annotation kill")),
+		`非预期 kill 错误应留痕，实际 ${JSON.stringify(warns)}`,
+	);
+	ok(
+		notified.some((n) => n.msg.includes("timed out waiting for feedback")),
+		"超时提示应照常发出",
+	);
 });
 
 test("CLI 非零退出且无 stdout: failed 通知（含 stderr）", async () => {
