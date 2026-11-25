@@ -129,10 +129,15 @@ export default function (pi: any) {
 		description: "Configure which skills inject into the system prompt",
 		handler: async (_args: string, ctx: any) => {
 			if (!ctx.hasUI) {
-				ctx.ui.notify(
+				ctx.ui?.notify(
 					"inject-skills requires an interactive TUI",
 					"warning",
 				);
+				return;
+			}
+			const ui = ctx.ui;
+			if (ui === undefined || typeof ui.select !== "function") {
+				process.stderr.write("inject-skills: requires omp 19.2+ (ctx.ui.select unavailable).\n");
 				return;
 			}
 

@@ -119,7 +119,10 @@ export default function activate(pi: PiLike): void {
 			// omp 19.2 起 pi-tui 的 SettingsList 已移除，改用它原生的 ctx.ui.select 勾选列表
 			// （selectionMarker: "checkbox"）：每次 Enter 关掉再按新状态重开，切换即写配置。
 			const ui = ctx.ui;
-			if (ui === undefined) return;
+			if (ui === undefined || typeof ui.select !== "function") {
+				process.stderr.write("ask-consultants: 需要 omp 19.2+（宿主未提供 ctx.ui.select）。\n");
+				return;
+			}
 			// 重开时把光标放回刚切换的那一行（按 selector，已启用行会排到前面）。
 			let focus: string | undefined;
 			for (;;) {
