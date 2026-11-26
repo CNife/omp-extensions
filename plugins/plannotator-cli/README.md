@@ -32,6 +32,17 @@ Esc 取消则什么都不发生，只有一条可选消息时不弹列表。宿�
 标注反馈”；选更早的消息时为“这是对倒数第 N 条助手消息的标注反馈”），因为标注载体是会话内消息、
 反馈本身不含文件名，不加说明会让 AI 困惑“文件在哪”。
 
+一条助手消息的正文 = 它的文本块 + 它**成功展示过**的 `out://` 回复，按 transcript 顺序合并：
+
+- `write path:"out://"`（旧会话可能是 `file_path`）的 `content` 算正文，但只有按 `toolCallId` 找到
+  对应的、`isError` 不为 true 的 toolResult 时才纳入；失败、超限、被拒绝或还没有 toolResult
+  （仍在流式或回合中断）的写入不进入选择器和浏览器。
+- `bash > out://` 与 eval 桥接写入的回复来自 toolResult 的 `details.replies`：出现即已被 `out://`
+  接受并展示，即使该 toolResult 本身是 error 也纳入。
+- 普通文件 `write` 及其他工具调用不贡献正文；不解析 bash 命令文本里的 `out://`，也不读取 `out://`。
+- 文本块之间保留单个换行，reply 块前后各留一个空行，整体 `trim()`。选择器摘要与字符数都按合并
+  后的正文计算；只有 `out://`、没有文本块的助手回合如今也会出现在列表里，并正常计入“倒数第 N 条”。
+
 ## 安装
 
 ```bash
@@ -45,8 +56,8 @@ Esc 取消则什么都不发生，只有一条可选消息时不弹列表。宿�
 - `/pna` → `plannotator annotate <target> --json`（解析决策 JSON 提取 `feedback`；文件夹自动
   扫描，HTML 不传 `--markdown` 即原始渲染，URL 直接抓取）
 - `/pnl` → 先用 `ctx.ui.select` 列出当前会话分支上最近 25 条非空 assistant 消息（选项
-  `#N · 首行摘要` + 字符数，#1 = 最新一条），选中项内容经 stdin 传给
-  `plannotator annotate-last --stdin --json`（无临时文件）
+  `#N · 首行摘要` + 字符数，#1 = 最新一条；正文为文本块与成功 `out://` 回复的合并结果，见上），
+  选中项内容经 stdin 传给 `plannotator annotate-last --stdin --json`（无临时文件）
 
 进程非阻塞：命令立即返回，浏览器关闭后异步将反馈发回 agent。
 
@@ -78,3 +89,5 @@ cd plugins/plannotator-cli && bun test
 用 stub CLI 替换真实二进制，覆盖：命令注册、参数构造、路径归一化、stdin 内容、消息选择器
 （选项构造、选中项 → stdin 映射、取消、单条跳过、非交互报错）、spawn 环境强制项、反馈直接
 投递（无 deliverAs）、json 完整即投递、超时兜底、错误与无反馈通知、非预期子进程错误留痕。
+
+`out://` 正文合并的设计与判定口径见 [ADR 0013](../../docs/adr/0013-plannotator-out-replies-in-message.md)。

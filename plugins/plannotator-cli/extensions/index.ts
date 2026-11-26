@@ -310,7 +310,18 @@ const SUMMARY_WIDTH = 40;
 
 interface SessionEntry {
   type?: string;
-  message?: { role?: string; content?: unknown };
+  message?: {
+    role?: string;
+    content?: unknown;
+    toolCallId?: unknown;
+    isError?: unknown;
+    details?: unknown;
+  };
+}
+
+interface MessagePiece {
+  kind: "text" | "reply";
+  text: string;
 }
 
 function partToText(part: unknown): string {
@@ -323,11 +334,67 @@ function partToText(part: unknown): string {
   return "";
 }
 
-function contentToText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map(partToText).filter(Boolean).join("\n");
-  if (content && typeof content === "object") return partToText(content);
-  return "";
+function replyWriteOf(part: unknown): { toolCallId: string; text: string } | undefined {
+  if (!part || typeof part !== "object") return undefined;
+  const call = part as { type?: unknown; name?: unknown; id?: unknown; arguments?: unknown };
+  if (call.type !== "toolCall" || call.name !== "write" || typeof call.id !== "string") {
+    return undefined;
+  }
+  if (!call.arguments || typeof call.arguments !== "object") return undefined;
+  const args = call.arguments as { path?: unknown; file_path?: unknown; content?: unknown };
+  const target = typeof args.path === "string" ? args.path : args.file_path;
+  if (typeof target !== "string" || !/^out:\/\//i.test(target.trim())) return undefined;
+  if (typeof args.content !== "string" || args.content.trim() === "") return undefined;
+  return { toolCallId: call.id, text: args.content };
+}
+
+function toolResultReplies(details: unknown): string[] {
+  if (!details || typeof details !== "object") return [];
+  const replies = (details as { replies?: unknown }).replies;
+  if (!Array.isArray(replies)) return [];
+  return replies.filter((reply): reply is string => typeof reply === "string");
+}
+
+function joinPieces(pieces: MessagePiece[]): string {
+  let out = "";
+  let previousReply = false;
+  for (const piece of pieces) {
+    const reply = piece.kind === "reply";
+    if (out) out += reply || previousReply ? "\n\n" : "\n";
+    out += piece.text;
+    previousReply = reply;
+  }
+  return out.trim();
+}
+
+function assistantMessagePieces(entries: unknown[], index: number, end: number): MessagePiece[] {
+  const content = (entries[index] as SessionEntry | undefined)?.message?.content;
+  const parts = Array.isArray(content) ? content : content === undefined ? [] : [content];
+  const replyWrites = new Set<string>();
+  for (const part of parts) {
+    const reply = replyWriteOf(part);
+    if (reply) replyWrites.add(reply.toolCallId);
+  }
+  const shownWrites = new Set<string>();
+  const windowReplies: string[] = [];
+  for (let i = index + 1; i < end; i++) {
+    const message = (entries[i] as SessionEntry | undefined)?.message;
+    if (message?.role !== "toolResult") continue;
+    const toolCallId = message.toolCallId;
+    if (typeof toolCallId === "string" && replyWrites.has(toolCallId) && message.isError !== true) {
+      shownWrites.add(toolCallId);
+    }
+    windowReplies.push(...toolResultReplies(message.details));
+  }
+  const pieces: MessagePiece[] = [];
+  for (const part of parts) {
+    const text = partToText(part);
+    if (text) pieces.push({ kind: "text", text });
+    const reply = replyWriteOf(part);
+    if (reply && shownWrites.has(reply.toolCallId)) pieces.push({ kind: "reply", text: reply.text });
+  }
+  for (const reply of windowReplies) pieces.push({ kind: "reply", text: reply });
+  return pieces;
 }
 
 function collectAssistantTexts(ctx: CommandCtx, limit: number): string[] {
@@ -336,13 +403,17 @@ function collectAssistantTexts(ctx: CommandCtx, limit: number): string[] {
     (typeof manager?.getBranch === "function"
       ? manager.getBranch()
       : manager?.getEntries?.()) || [];
-  const texts: string[] = [];
-  for (let i = entries.length - 1; i >= 0 && texts.length < limit; i--) {
+  const assistantIndexes: number[] = [];
+  for (let i = 0; i < entries.length; i++) {
     const entry = entries[i] as SessionEntry | undefined;
-    if (entry?.type === "message" && entry.message?.role === "assistant") {
-      const text = contentToText(entry.message.content).trim();
-      if (text) texts.push(text);
-    }
+    if (entry?.type === "message" && entry.message?.role === "assistant") assistantIndexes.push(i);
+  }
+  const texts: string[] = [];
+  for (let n = assistantIndexes.length - 1; n >= 0 && texts.length < limit; n--) {
+    const index = assistantIndexes[n];
+    const end = n + 1 < assistantIndexes.length ? assistantIndexes[n + 1] : entries.length;
+    const text = joinPieces(assistantMessagePieces(entries, index, end));
+    if (text) texts.push(text);
   }
   return texts;
 }

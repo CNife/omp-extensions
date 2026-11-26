@@ -1,5 +1,5 @@
 import { deepStrictEqual, equal, ok, strictEqual } from "node:assert";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -240,7 +240,7 @@ test("/pnr 无参: review + 无 URL 通知 + spawn env 透传", async () => {
 
 	await waitFor(() => existsSync(stubLog));
 	const log = readFileSync(stubLog, "utf8");
-	assertStubLog(log, `cwd=${scratch}`, "arg=review");
+	assertStubLog(log, `cwd=${realpathSync(scratch)}`, "arg=review");
 	assertStubLog(log, "env PLANNOTATOR_AI=disabled");
 	ok(!log.includes("env BROWSER=none"), "不应强制 BROWSER=none");
 	ok(!log.includes("env PLANNOTATOR_BROWSER=none"), "不应强制 PLANNOTATOR_BROWSER=none");
