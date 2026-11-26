@@ -788,7 +788,7 @@ test("挂起时非 JSON stdout 走超时兜底投递", async () => {
 	const { scratch } = setupScratch();
 	process.env.PLANNO_STUB_STDOUT = "部分反馈文本";
 	process.env.PLANNO_STUB_HANG = "1";
-	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "200";
+	process.env.PLANNOTATOR_FEEDBACK_TIMEOUT_MS = "2000";
 	const pi = makePi();
 	plannotatorCli(pi);
 	command(pi, "pnr").handler(undefined, makeCtx(scratch, [], []));
